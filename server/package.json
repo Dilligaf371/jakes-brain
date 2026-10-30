@@ -1,0 +1,8 @@
+{
+  "name": "hq-server",
+  "private": true,
+  "type": "module",
+  "description": "HQ backend: static web/ + JSON API on Node 22, zero npm dependencies",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "start": "node index.js" }
+}

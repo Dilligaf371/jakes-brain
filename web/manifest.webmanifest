@@ -1,0 +1,15 @@
+{
+  "name": "HQ",
+  "short_name": "HQ",
+  "description": "Jake's PC at a glance: machine status, services, and quick notes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f2f7",
+  "theme_color": "#f2f2f7",
+  "icons": [
+    { "src": "/icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

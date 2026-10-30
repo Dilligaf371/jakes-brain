@@ -1,0 +1,12 @@
+{
+  "services": [
+    { "unit": "boost-tracker.service",    "label": "Reels tracker" },
+    { "unit": "boost-tracker-yt.service", "label": "YouTube ingest" },
+    { "unit": "pocket3-vlog.service",     "label": "Pocket 3 recorder" },
+    { "unit": "pocket3-autovlog.service", "label": "Auto-vlog builder" },
+    { "unit": "feed-accounts.service",    "label": "Feed accounts" },
+    { "unit": "zora-bot.service",         "label": "Zora bot" },
+    { "unit": "ollama.service",           "label": "Ollama" },
+    { "unit": "hq.service",               "label": "HQ (this app)" }
+  ]
+}

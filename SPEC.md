@@ -170,7 +170,8 @@ hq/
   `MARKETING_VERSION "1.0"`, `CODE_SIGN_STYLE Automatic`, `DEVELOPMENT_TEAM 3VTHP9BHH6`.
   Info properties: `NSAppTransportSecurity: { NSAllowsArbitraryLoads: true }` (plain
   http to private IPs — personal app, not for the App Store),
-  `ITSAppUsesNonExemptEncryption: false`.
+  `ITSAppUsesNonExemptEncryption: false`, `NSLocalNetworkUsageDescription` (iOS asks before the
+  first LAN connection).
 - Files in `ios/HQ/`:
   - `HQApp.swift` — `@main`, `WindowGroup { RootView() }`, watches `scenePhase`.
   - `Config.swift` — `enum Config { static let candidates: [URL] = [tailscale, lan];
@@ -196,10 +197,12 @@ hq/
     injecting `window.HQ = { native: true, version: "<MARKETING_VERSION> (<BUILD>)" }`
     read from `Bundle.main.infoDictionary`. `allowsBackForwardNavigationGestures =
     false`, `scrollView.contentInsetAdjustmentBehavior = .never` (the web app handles
-    safe areas), `isOpaque = false`, `backgroundColor = .systemBackground`,
+    safe areas), `isOpaque = false`, `backgroundColor = .systemGroupedBackground` (matches the page's
+    #f2f2f7 / #000 so rubber-band overscroll shows the same colour),
     `scrollView.bounces = true`, `isInspectable = true` (iOS 16.4+, lets Safari on the
     Mac inspect the page). `UIRefreshControl` on `scrollView` → `reload()`.
     Navigation delegate: main-frame navigations to a different host than the base URL,
+    (compare origin: scheme+host+port, so other services on the PC open in Safari too)
     or `target=_blank` (`navigationAction.targetFrame == nil`), open in Safari via
     `UIApplication.shared.open` and cancel. `didFailProvisionalNavigation` with a
     network error → the coordinator reports up so `RootView` goes `.unreachable`
