@@ -1,0 +1,7 @@
+[Unit]
+Description=Jake's Brain: pull the latest app from GitHub
+
+[Service]
+Type=oneshot
+Environment=PATH=/home/jacob-beauchamp/.nvm/versions/node/v22.23.3/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/jakes-data-app/deploy/pull.sh

@@ -9,8 +9,14 @@ shown on his iPhone (native shell) and on the PC (browser app window). Read `REA
   (`web/kit.js`, `web/launcher.js`, `web/styles.css`, `server/index.js`, `router.js`, `http.js`,
   `db.js`, `tools.js`) change rarely; prefer adding an app over editing core.
 - **Smallest complete example:** `web/apps/tasks/` + `server/apps/tasks.js`.
-- **Shipping:** from the Mac run `deploy/deploy.sh "message"`. On the PC (`~/jakes-data-app`),
-  `web/` edits are live at once; after `server/` edits run `systemctl --user restart jakes-data`.
+- **Shipping (this is the important one):** commit and push, nothing else. Anything pushed to `main`
+  or a `claude/*` branch goes live on its own: a GitHub Action merges `claude/*` into `main`, the
+  PC pulls `main` about every 45 seconds, and the phone and desktop reload themselves within 30
+  seconds. Do not open a pull request. From the Mac, `deploy/deploy.sh "message"` does the same,
+  faster. Never edit files on the PC directly: its copy only fast-forwards, so a local edit blocks
+  every later update.
+- **Mobile and cloud sessions** cannot reach the PC. They cannot build the iOS shell, so `ios/`
+  changes wait for the Mac. Test with a local server, then push.
 - **Data:** SQLite at `~/jakes-data-app-data/jakesdata.db` on the PC. Migrations are per module
   (`migrations: [{ id: '<app>-N', sql }]`); never store data inside the repo.
 - **UI rules:** iPhone-like and calm. System font, light + dark, solid colours, no gradients,

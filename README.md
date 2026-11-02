@@ -41,19 +41,14 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 
 ## Making changes
 
-**From the Mac** (this repo, `~/jakes-data-app`):
+**From Claude on your phone:** open this repo in Claude Code and ask for the change. When it pushes,
+a GitHub Action merges its `claude/*` branch into `main`, the PC pulls within about 45 seconds, and
+the app reloads itself. Your laptop can be closed; only the PC has to be on.
 
-```bash
-deploy/deploy.sh "what changed"
-```
+**From the Mac:** `deploy/deploy.sh "what changed"` commits, pushes to GitHub, and tells the PC to
+pull right away.
 
-Commits and pushes to the PC. A hook there restarts `jakes-data.service` only if `server/` or
-`deploy/` changed; `web/` edits are live immediately. The phone and the desktop window reload
-themselves when the build changes.
-
-**On the PC directly** (`ssh pcserver`, repo at `~/jakes-data-app`): edit `web/` and it is live;
-after editing `server/` run `systemctl --user restart jakes-data`. Commit there and
-`git pull pc main` on the Mac.
+Don't edit files on the PC directly. GitHub is the source of truth and the PC only fast-forwards.
 
 **Adding an app:** add an entry to `web/apps.json`, create `web/apps/<id>/index.js` (export
 `{ mount(root, ctx), unmount(), route(sub) }`) and `styles.css` (every selector prefixed

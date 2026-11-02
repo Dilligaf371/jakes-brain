@@ -1,0 +1,10 @@
+[Unit]
+Description=Jake's Brain: check GitHub for updates
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=45s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
