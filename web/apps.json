@@ -11,6 +11,7 @@
     "tasks",
     "grocery",
     "reminders",
+    "workout",
     "habits",
     "weather",
     "files",
@@ -117,6 +118,11 @@
       "label": "Groceries",
       "color": "#65a30d",
       "badge": "/api/grocery/badge"
+    },
+    "workout": {
+      "label": "Workout",
+      "color": "#2563eb",
+      "badge": "/api/workout/badge"
     }
   }
 }

@@ -413,6 +413,18 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
   tap the circle = in the cart, tap the name = edit sheet (item, quantity, aisle, delete);
   "In the cart" section; nav bar "Clear" empties the cart via confirmSheet.
 
+### workout  (added 2026-11-02 — "a workout app sort of like Hevy")
+- Tile: id `workout`, label "Workout", colour #2563eb, glyph = dumbbell, badge = 1 while a workout is in progress.
+- Tables (migration `workout-1`): `workout_exercises` (library, ~75 built-ins seeded + custom),
+  `workout_sessions`, `workout_entries` (an exercise inside a workout), `workout_sets`,
+  `workout_routines` (JSON template), `workout_active` (the in-progress draft, one row).
+  Weights are stored in kg, distances in metres; settings key `workout.units` ('lb' | 'kg', default lb) picks the display.
+- Routes are listed in the header of `server/apps/workout.js`.
+- UI: tabs Workout (start empty / resume, routines) · History (workouts-per-week chart, workout
+  cards) · Exercises (library). The logger (`#/workout/active`) has a set table per exercise
+  (SET · PREVIOUS · weight/reps/time/distance · check), set types (warm-up, drop, failure), a rest
+  timer bar, Finish → saved workout with new records. Workouts can be edited, repeated, saved as routines.
+
 ## Desktop version (added 2026-11-02)
 
 Jake also uses the app on the Linux PC itself, opened to the Graph. The desktop version is the
