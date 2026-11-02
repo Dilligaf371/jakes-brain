@@ -1,6 +1,6 @@
-# Jake's Data — personal iPhone app, backend on the Linux PC
+# Jake's Brain — personal iPhone app, backend on the Linux PC
 
-Jake's Data is Jake's personal iPhone app. It is a thin native shell (SwiftUI + WKWebView)
+Jake's Brain is Jake's personal iPhone app. It is a thin native shell (SwiftUI + WKWebView)
 around a web app + JSON API that run on his Linux PC. Editing `web/` or `server/`
 on the PC changes the app with no rebuild; only `ios/` changes need Xcode.
 
@@ -44,7 +44,7 @@ jakes-data-app/
     index.html  kit.js  launcher.js  styles.css  apps.json  manifest.webmanifest  icons/
     apps/<id>/       index.js + styles.css per app (see "Web (web/) — core contract")
   ios/               xcodegen project (project.yml) -> JakesData.xcodeproj (generated, gitignored)
-    Jake's Data/              Swift sources + Assets.xcassets + Info.plist
+    Jake's Brain/              Swift sources + Assets.xcassets + Info.plist
   deploy/
     jakes-data.service       systemd --user unit for the PC
     deploy.sh        Mac -> PC: commit + git push to the PC, hook restarts the service
@@ -55,7 +55,7 @@ jakes-data-app/
 
 ## v2: a home screen inside the app
 
-Jake's Data v2 is a **launcher**: the first screen is an iPhone-style home screen (a grid of
+Jake's Brain v2 is a **launcher**: the first screen is an iPhone-style home screen (a grid of
 app tiles + a dock). Tapping a tile opens one of Jake's own apps full-screen. Every app is a
 small ES module under `web/apps/<id>/` plus (if it needs data) a server module
 `server/apps/<id>.js`. Nothing native changes; the shell is a WKWebView with inline media
@@ -203,7 +203,7 @@ server/
 
 ```json
 {
-  "services": [ ...v1 list unchanged, with "jakes-data.service" labelled "Jake's Data (this app)" ],
+  "services": [ ...v1 list unchanged, with "jakes-data.service" labelled "Jake's Brain (this app)" ],
   "tools": { "ffmpeg": "/home/jacob-beauchamp/pocket3-vlog/bin/ffmpeg", "ffprobe": "/home/jacob-beauchamp/pocket3-vlog/bin/ffprobe" },
   "fileRoots": [
     { "name": "Videos",     "path": "~/Videos" },
@@ -413,7 +413,7 @@ launcher entry, so it behaves like an installed app.
   root has the class `full-bleed` (graph and the JakeTube watch page may add it), which gets the
   whole window. Keyboard: Escape = back/home. No layout change below 700px.
 - `deploy/desktop/` (the `desktop` builder owns it):
-  - `jakes-data.desktop` — `Name=Jake's Data`, `Exec=<home>/jakes-data-app/deploy/desktop/open.sh %u`,
+  - `jakes-data.desktop` — `Name=Jake's Brain`, `Exec=<home>/jakes-data-app/deploy/desktop/open.sh %u`,
     `Icon=jakes-data`, `StartupWMClass=JakesData`, `Categories=Utility;`.
   - `open.sh [route]` — opens `http://localhost:4800/#/<route or empty>` in an app window:
     `BROWSER --app=URL --class=JakesData --user-data-dir=$HOME/.config/jakes-data-app-window --window-size=1280,860`

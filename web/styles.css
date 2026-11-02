@@ -1,4 +1,4 @@
-/* Jake's Data — core styles: launcher (home screen), app layer, nav bar, shared components,
+/* Jake's Brain — core styles: launcher (home screen), app layer, nav bar, shared components,
    light + dark via prefers-color-scheme, safe areas. Each app's own rules live in
    web/apps/<id>/styles.css prefixed with `.app-<id>`. */
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Jake's Data on the PC: open the web app in a chromeless browser window (Chromium --app= mode).
+# Jake's Brain on the PC: open the web app in a chromeless browser window (Chromium --app= mode).
 #
 #   deploy/desktop/open.sh                 the home screen  -> http://localhost:4800/#/
 #   deploy/desktop/open.sh graph           a route          -> http://localhost:4800/#/graph

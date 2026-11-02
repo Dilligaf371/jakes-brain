@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run ON THE PC. Installs the GNOME launcher entry for Jake's Data for this user (no sudo):
+# Run ON THE PC. Installs the GNOME launcher entry for Jake's Brain for this user (no sudo):
 #   ~/.local/share/applications/jakes-data.desktop   (with <home> expanded)
 #   ~/.local/share/icons/hicolor/512x512/apps/jakes-data.png
 # then refreshes the desktop database and icon cache when those tools exist and says how to
@@ -118,7 +118,7 @@ if [ "$PIN" = 1 ]; then pin_to_dash; fi
 
 cat <<EOF
 
-Installed. Press Super, type "Jake's Data" and press Enter to open it (or run
+Installed. Press Super, type "Jake's Brain" and press Enter to open it (or run
 $OPEN_SH graph for a route). Right-click its icon in the dash for Graph / Notes / JakeGPT.
 To pin it to the dash: open it, right-click its icon in the dash -> "Pin to Dash",
 or run: $HERE/install-desktop.sh --pin

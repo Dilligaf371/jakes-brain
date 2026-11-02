@@ -1,6 +1,6 @@
 import Foundation
 
-/// Finds a reachable Jake's Data server.
+/// Finds a reachable Jake's Brain server.
 ///
 /// Preference order: the `jakesdata.baseURL` override (if set), then the last URL that
 /// answered (`jakesdata.lastGoodURL`), then the built-in candidates. Every URL is probed at

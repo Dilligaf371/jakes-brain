@@ -1,4 +1,4 @@
-# Jake's Data iOS shell — regenerate the Xcode project with:  cd ios && xcodegen generate
+# Jake's Brain iOS shell — regenerate the Xcode project with:  cd ios && xcodegen generate
 # (JakesData.xcodeproj is gitignored; this file is the source of truth.)
 name: JakesData
 options:
@@ -20,7 +20,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jakebeau.jakesdata
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: "Jake's Data"
+        INFOPLIST_KEY_CFBundleDisplayName: "Jake's Brain"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
@@ -28,8 +28,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
-        CURRENT_PROJECT_VERSION: 2
-        MARKETING_VERSION: "1.1"
+        CURRENT_PROJECT_VERSION: 3
+        MARKETING_VERSION: "1.2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VTHP9BHH6
     info:
@@ -42,11 +42,11 @@ targets:
           NSAllowsArbitraryLoads: true
         # The LAN candidate (192.168.1.81) is a local-network connection; without this
         # key iOS never shows the Local Network prompt and silently denies the probe.
-        NSLocalNetworkUsageDescription: Jake's Data connects to your PC on the home Wi-Fi.
+        NSLocalNetworkUsageDescription: Jake's Brain connects to your PC on the home Wi-Fi.
         ITSAppUsesNonExemptEncryption: false
         # The web app's photo/video pickers (Jakestagram) can also offer the camera.
-        NSCameraUsageDescription: Jake's Data uses the camera for photos and videos you post.
-        NSMicrophoneUsageDescription: Jake's Data uses the microphone when you record a video to post.
-        NSPhotoLibraryUsageDescription: Jake's Data lets you pick photos and videos to post.
+        NSCameraUsageDescription: Jake's Brain uses the camera for photos and videos you post.
+        NSMicrophoneUsageDescription: Jake's Brain uses the microphone when you record a video to post.
+        NSPhotoLibraryUsageDescription: Jake's Brain lets you pick photos and videos to post.
     scheme:
       testTargets: []

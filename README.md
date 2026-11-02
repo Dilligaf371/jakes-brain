@@ -1,4 +1,4 @@
-# Jake's Data
+# Jake's Brain
 
 Jake's personal app. On the iPhone it is a thin native shell; on the Linux PC it is a
 chromeless browser window. Both show the same web app served by the PC, so editing the files
@@ -67,7 +67,7 @@ launcher picks tiles up on reload. `SPEC.md` has the full contract and `web/apps
 ## Desktop version (on the PC)
 
 ```bash
-deploy/desktop/install-desktop.sh      # once: adds "Jake's Data" to the GNOME app grid
+deploy/desktop/install-desktop.sh      # once: adds "Jake's Brain" to the GNOME app grid
 deploy/desktop/open.sh graph           # opens a window straight to the Graph
 ```
 

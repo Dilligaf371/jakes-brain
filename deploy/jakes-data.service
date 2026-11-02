@@ -1,5 +1,5 @@
 [Unit]
-Description=Jake's Data — Jake's personal iPhone app backend (port 4800)
+Description=Jake's Brain — Jake's personal iPhone app backend (port 4800)
 After=network-online.target
 Wants=network-online.target
 

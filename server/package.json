@@ -2,7 +2,7 @@
   "name": "jakes-data-server",
   "private": true,
   "type": "module",
-  "description": "Jake's Data backend: static web/ + JSON API on Node 22, zero npm dependencies",
+  "description": "Jake's Brain backend: static web/ + JSON API on Node 22, zero npm dependencies",
   "engines": { "node": ">=22.13" },
   "scripts": { "start": "node index.js" }
 }

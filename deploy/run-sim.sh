@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and launch Jake's Data in the booted iOS Simulator (boots "iPhone 17 Pro" if nothing is booted).
+# Build and launch Jake's Brain in the booted iOS Simulator (boots "iPhone 17 Pro" if nothing is booted).
 set -euo pipefail
 cd "$(dirname "$0")/../ios"
 xcodegen generate >/dev/null

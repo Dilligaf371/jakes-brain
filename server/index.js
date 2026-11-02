@@ -1,4 +1,4 @@
-// Jake's Data server entry. Serves the web app from JAKESDATA_WEB (default <repo>/web), the
+// Jake's Brain server entry. Serves the web app from JAKESDATA_WEB (default <repo>/web), the
 // JSON API under /api (core routes + every module in server/apps/*.js), and uploads/thumbs
 // under /media and /cache. Node 22, zero npm dependencies.
 //

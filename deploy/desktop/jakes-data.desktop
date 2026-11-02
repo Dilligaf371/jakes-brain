@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.5
-Name=Jake's Data
+Name=Jake's Brain
 Comment=Jake's own apps on the PC: notes, tasks, calendar, graph, photos, videos and chat
 Exec=<home>/jakes-data-app/deploy/desktop/open.sh %u
 Icon=jakes-data

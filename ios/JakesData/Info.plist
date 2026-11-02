@@ -26,12 +26,12 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Jake's Data uses the camera for photos and videos you post.</string>
+	<string>Jake's Brain uses the camera for photos and videos you post.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Jake's Data connects to your PC on the home Wi-Fi.</string>
+	<string>Jake's Brain connects to your PC on the home Wi-Fi.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Jake's Data uses the microphone when you record a video to post.</string>
+	<string>Jake's Brain uses the microphone when you record a video to post.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Jake's Data lets you pick photos and videos to post.</string>
+	<string>Jake's Brain lets you pick photos and videos to post.</string>
 </dict>
 </plist>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Jake's Data signed with Jake's team and install it on his iPhone (USB or same-WiFi, unlocked).
+# Build Jake's Brain signed with Jake's team and install it on his iPhone (USB or same-WiFi, unlocked).
 # A development install from a paid team lasts 1 year. Re-run after any ios/ change.
 set -euo pipefail
 cd "$(dirname "$0")/../ios"

@@ -1,4 +1,4 @@
-# Jake's Data — notes for agents (Claude Code / Codex)
+# Jake's Brain — notes for agents (Claude Code / Codex)
 
 This repo is Jake's personal app: a home-screen launcher of small apps, served by the Linux PC,
 shown on his iPhone (native shell) and on the PC (browser app window). Read `README.md`, then
