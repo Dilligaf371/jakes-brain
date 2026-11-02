@@ -1,0 +1,226 @@
+/* Weather app. Calm, system font, solid colours; glyphs are stroked inline SVG. */
+
+/* ---- hero: city, big temperature, condition, details */
+.app-weather .hero {
+  text-align: center;
+  padding: 10px 0 6px;
+}
+
+.app-weather .hero .city {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.app-weather .hero .temp {
+  margin-top: 2px;
+  font-size: 84px;
+  font-weight: 200;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  padding-left: 0.18em; /* optically centre the glyph next to the degree sign */
+}
+
+.app-weather .hero .cond {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.app-weather .hero .hl {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 500;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .hero .meta {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .hero .hero-note {
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
+.app-weather .hero .button { margin-top: 14px; }
+
+/* ---- hourly strip */
+.app-weather .hourly {
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-weather .strip {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 12px 6px;
+  gap: 2px;
+}
+
+.app-weather .strip::-webkit-scrollbar { display: none; }
+
+.app-weather .hour {
+  flex: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .hour .h-time {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.app-weather .hour .h-precip,
+.app-weather .day .d-precip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 13px;
+  min-height: 13px;
+}
+
+.app-weather .hour .h-temp {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---- 7-day list */
+.app-weather .daily { padding: 0 14px; }
+
+.app-weather .day {
+  display: grid;
+  grid-template-columns: 56px 44px 36px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--hair);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .day:last-child { border-bottom: 0; }
+
+.app-weather .day .d-name { font-weight: 500; }
+
+.app-weather .day .d-cond {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-weather .day .d-min {
+  color: var(--muted);
+  text-align: right;
+}
+
+.app-weather .day .d-max {
+  text-align: right;
+  font-weight: 500;
+}
+
+.app-weather .day .d-bar {
+  position: relative;
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.app-weather .day .d-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+/* ---- glyphs: the occluding cloud is filled with the surface it sits on */
+.app-weather .wx { flex: 0 0 auto; display: inline-block; vertical-align: middle; color: var(--text); }
+.app-weather .wx .occ { fill: var(--bg); }
+.app-weather .card .wx .occ { fill: var(--card); }
+
+/* ---- units row + updated line */
+.app-weather .row .segmented { margin-left: auto; }
+.app-weather .main .card + .card { margin-top: 12px; }
+.app-weather .main .section-title + .card { margin-top: 0; }
+
+/* ---- search screen */
+.app-weather .search-form {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.app-weather .search-form .icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.app-weather .search-input {
+  padding-left: 38px;
+}
+
+.app-weather .search-input::-webkit-search-decoration,
+.app-weather .search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.app-weather .results { padding: 0 14px; }
+.app-weather .results li { list-style: none; }
+
+.app-weather .result {
+  min-height: 56px;
+  padding: 9px 0;
+}
+
+.app-weather .result .r-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app-weather .result .r-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-weather .result .r-sub {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .app-weather .result:hover { background: var(--track); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+}
+
+/* ---- wider screens: the hero can breathe, the hourly columns get a little wider */
+@media (min-width: 700px) {
+  .app-weather .hero { padding-top: 22px; }
+  .app-weather .hero .temp { font-size: 96px; }
+  .app-weather .hour { flex-basis: 64px; }
+}

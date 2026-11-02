@@ -1,0 +1,257 @@
+/* Habits app. One row per habit: colour dot, name, streak, and a 7-day strip of circles
+   (today rightmost; today + yesterday tap to toggle, older days read-only). The row's
+   habit colour is the custom property --c (set inline on the <li>). */
+
+.app-habits .habits { padding-top: 2px; padding-bottom: 2px; }
+
+.app-habits .habit {
+  --c: var(--accent);
+  padding: 8px 0 6px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-habits .habit:last-child { border-bottom: 0; }
+
+.app-habits .head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.app-habits .head .dot {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.app-habits .head .name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-habits .head .streak {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app-habits .head .more {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  margin: -2px -14px -2px -4px; /* the card's padding: the dots sit at the edge, the target stays 44x44 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.app-habits .head .more:active { opacity: 0.5; }
+
+/* ------------------------------------------------------------------ 7-day strip */
+
+.app-habits .strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin: 0 -4px;
+}
+
+.app-habits .day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 0 2px;
+}
+
+.app-habits .day .circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--grey);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.app-habits .day .circle .icon {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+
+.app-habits .day .wd {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* Older days: read-only, a missed day is just a faint ring. */
+.app-habits .day.locked { cursor: default; }
+.app-habits .day.locked .circle { border-color: var(--hair); }
+
+/* Today: a ring in the habit's colour invites the tap; its weekday is the strong one. */
+.app-habits .day.today .circle { border-width: 2px; border-color: var(--c); }
+.app-habits .day.today .wd { color: var(--text); font-weight: 600; }
+
+/* Checked: filled in the habit's colour with a white tick. */
+.app-habits .day.on .circle { background: var(--c); border-color: var(--c); }
+.app-habits .day.on .circle .icon { display: block; }
+
+.app-habits .day:not(.locked):active .circle { transform: scale(0.88); }
+
+.app-habits .day:focus-visible { outline: none; }
+.app-habits .day:focus-visible .circle { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------ archived rows */
+
+.app-habits .habit.archived .head .dot { opacity: 0.45; }
+.app-habits .habit.archived .head .name { color: var(--muted); font-weight: 400; }
+
+/* ------------------------------------------------------------------ new / edit sheet */
+
+.app-habits .sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 30; /* above the nav bar (8), below the kit's sheets (40) and toast (50) */
+}
+
+.app-habits .sheet .backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  animation: habits-fade-in 180ms ease both;
+}
+
+.app-habits .sheet .panel {
+  position: absolute;
+  left: calc(8px + var(--sal));
+  right: calc(8px + var(--sar));
+  bottom: calc(var(--sab) + 8px);
+  max-width: 560px;
+  margin: 0 auto;
+  animation: habits-slide-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.app-habits .sheet.out .backdrop { animation: habits-fade-out 160ms ease both; }
+.app-habits .sheet.out .panel { animation: habits-slide-down 160ms ease-in both; }
+.app-habits .sheet.out { pointer-events: none; }
+
+.app-habits .sheet .group {
+  background: var(--sheet);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.app-habits .sheet .group:last-child { margin-bottom: 0; }
+
+.app-habits .sheet .form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+}
+
+.app-habits .sheet .title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.app-habits .sheet .input { background: var(--card); }
+
+.app-habits .swatches {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.app-habits .swatch {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.app-habits .swatch::before {
+  content: "";
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--c);
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+
+.app-habits .swatch[aria-checked="true"]::before {
+  box-shadow: 0 0 0 2px var(--sheet), 0 0 0 4px var(--c);
+}
+
+.app-habits .swatch:active::before { transform: scale(0.9); }
+
+.app-habits .sheet .primary {
+  min-height: 48px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.app-habits .sheet .primary:disabled { opacity: 0.45; cursor: default; }
+.app-habits .sheet .primary:active:not(:disabled) { opacity: 0.7; }
+
+.app-habits .sheet .cancel {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+}
+
+.app-habits .sheet .cancel:active { background: var(--track); }
+
+@keyframes habits-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes habits-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes habits-slide-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes habits-slide-down { from { transform: none; opacity: 1; } to { transform: translateY(30px); opacity: 0; } }
+
+/* ------------------------------------------------------------------ misc */
+
+.app-habits .habit, .app-habits .strip, .app-habits .swatches, .app-habits .sheet .title {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-habits .day .circle, .app-habits .swatch::before { transition: none; }
+  .app-habits .sheet .backdrop, .app-habits .sheet .panel { animation-duration: 1ms; }
+}
+
+@media (hover: hover) {
+  .app-habits .day:not(.locked):hover .circle { border-color: var(--c); }
+  .app-habits .head .more:hover { color: var(--text); }
+  .app-habits .sheet .primary:hover:not(:disabled), .app-habits .sheet .cancel:hover { opacity: 0.8; }
+}

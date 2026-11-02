@@ -754,3 +754,141 @@ body.app-open .toast { bottom: calc(var(--sab) + 28px); }
 }
 
 .tile .glyph { -webkit-user-drag: none; }
+
+/* ------------------------------------------------------------------ wide screens (the desktop version) */
+
+/* Everything below is additive and lives inside min-width: 700px queries: nothing changes on
+   the phone. The desktop version is this same web app in a chromeless browser window
+   (deploy/desktop/open.sh, 1280x860 by default), so a wide window gets a centred, calm
+   launcher and a centred app column instead of phone UI stretched across the screen. */
+
+@media (min-width: 700px) {
+  :root {
+    --tile: 76px;
+    --tile-radius: 16px;
+    --column: 980px; /* the app column; the nav bar spans exactly this */
+  }
+
+  /* Launcher: 6 columns, 760px wide, centred; the dock is a compact centred bar. */
+  .home {
+    padding-top: calc(var(--sat) + var(--banner-h) + 44px);
+    padding-bottom: calc(var(--sab) + 32px);
+  }
+
+  .home-date {
+    align-self: center;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto 36px;
+    font-size: 15px;
+  }
+
+  .grid {
+    align-self: center;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    grid-template-columns: repeat(6, 1fr);
+    row-gap: 30px;
+    padding: 0;
+  }
+
+  .tile-btn {
+    max-width: 108px;
+    gap: 8px;
+  }
+
+  .tile-label { font-size: 12px; }
+
+  .tile-calendar .cal-wd {
+    margin-top: 11px;
+    font-size: 11px;
+  }
+
+  .tile-calendar .cal-day {
+    margin-top: 4px;
+    font-size: 34px;
+  }
+
+  .badge {
+    top: -8px;
+    right: -8px;
+  }
+
+  .dock {
+    align-self: center;
+    width: auto;
+    margin: auto auto 0; /* margin-top: auto keeps it pinned to the bottom; auto sides centre it */
+    grid-template-columns: repeat(4, var(--tile));
+    column-gap: 28px;
+    padding: 18px 26px;
+    border-radius: 30px;
+  }
+
+  /* App layer: a centred column of --column with the page background on both sides. The
+     nav bar is fixed, so it is centred on the viewport; the layer reserves a scrollbar
+     gutter on both edges so the column below it is centred on the viewport too and the two
+     line up whether or not a scrollbar is showing. */
+  .applayer { scrollbar-gutter: stable both-edges; }
+
+  .app-root {
+    max-width: var(--column);
+    margin: 0 auto;
+  }
+
+  .app-content { max-width: 680px; }
+
+  .navbar {
+    left: max(0px, calc(50% - var(--column) / 2));
+    right: max(0px, calc(50% - var(--column) / 2));
+  }
+
+  /* An app that wants the whole window (the graph canvas, the JakeTube watch page) adds
+     `full-bleed` to its root: no column, no gutters, nav bar across the window. */
+  .applayer:has(> .full-bleed) { scrollbar-gutter: auto; }
+  .app-root.full-bleed { max-width: none; }
+  .app-root.full-bleed > .navbar { left: 0; right: 0; }
+
+  /* Sheets: a 420px dialog in the middle of the window instead of a strip along the bottom. */
+  .sheet {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sheet-panel {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 420px;
+    max-width: calc(100% - 32px);
+    max-height: calc(100% - 64px);
+  }
+
+  .toast { bottom: calc(var(--sab) + 160px); }
+  body.app-open .toast { bottom: calc(var(--sab) + 40px); }
+}
+
+/* Once the window is wider than the column, hairline edges show where the column is
+   (the nav bar carries the same edges so the two read as one panel). */
+@media (min-width: 1040px) {
+  .app-root:not(.full-bleed) {
+    box-shadow: 1px 0 0 var(--hair), -1px 0 0 var(--hair);
+  }
+
+  .app-root:not(.full-bleed) > .navbar {
+    box-shadow: 1px 0 0 var(--hair), -1px 0 0 var(--hair);
+  }
+}
+
+/* Mouse: tiles lift a little under the pointer; a press still shrinks them as on the phone. */
+@media (min-width: 700px) and (hover: hover) {
+  .tile-btn { cursor: pointer; }
+  .tile-btn:hover .tile { transform: scale(1.04); }
+
+  .tile-btn:active .tile {
+    filter: brightness(0.75);
+    transform: scale(0.96);
+  }
+}

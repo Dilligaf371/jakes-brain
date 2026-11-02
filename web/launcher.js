@@ -484,6 +484,37 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refreshAll();
 });
 
+// ---------------------------------------------------------------- keyboard (the desktop version)
+
+// Escape = back/home, the keyboard's version of the `‹ Home` button when the app runs in a
+// window on the PC. In order: an open sheet closes; a focused field just loses focus (so a
+// half-typed task or note is not abandoned by accident; a second Escape then navigates); an
+// app deeper than its root goes back one level; an app at its root goes home. The home
+// screen ignores it. An app that handles Escape itself (the graph deselecting a node) calls
+// event.preventDefault() in its own keydown listener and is left alone.
+function onEscape(event) {
+  if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+  const sheet = $('sheet');
+  if (sheet && !sheet.hidden) {
+    const backdrop = sheet.querySelector('.sheet-backdrop');
+    if (backdrop) backdrop.click(); // same as tapping outside: the sheet resolves null
+    event.preventDefault();
+    return;
+  }
+  const active = document.activeElement;
+  if (active && active !== document.body && (active.isContentEditable || active.matches('input, textarea, select'))) {
+    active.blur();
+    event.preventDefault();
+    return;
+  }
+  if (!current || busy) return;
+  event.preventDefault();
+  if (current.sub) nav.back();
+  else nav.home();
+}
+
+window.addEventListener('keydown', onEscape);
+
 // ---------------------------------------------------------------- boot
 
 async function boot() {

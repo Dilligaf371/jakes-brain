@@ -1,0 +1,120 @@
+/* Files app: read-only browser of PC folders. Shared .card/.row/.kv/.empty/.button come
+   from the core; everything here is prefixed with .app-files. */
+
+/* ---- rows: folder / file glyph, name, size or item count, chevron for folders */
+.app-files .row .glyph {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+}
+
+.app-files .row .glyph.folder { color: var(--accent); }
+
+.app-files .row .right { font-size: 15px; }
+
+.app-files .row.missing { cursor: default; }
+.app-files .row.missing .label { color: var(--muted); }
+.app-files .row.missing .glyph { color: var(--grey); }
+.app-files .row.missing:active { background: none; margin: 0; padding-left: 0; padding-right: 0; }
+
+/* ---- previews */
+.app-files .preview { margin-bottom: 4px; }
+
+.app-files .preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.app-files .preview video {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 12px;
+  background: #000;
+}
+
+.app-files .audio-box {
+  padding: 14px;
+  background: var(--card);
+  border-radius: 12px;
+}
+
+.app-files .preview audio {
+  display: block;
+  width: 100%;
+}
+
+/* Text files: monospace, scrolls both ways; txt/md wrap instead. */
+.app-files .text {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--card);
+  border-radius: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+  max-height: calc(100vh - var(--nav-h) - 200px);
+  min-height: 60px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.app-files .text.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* No preview (or a preview that failed): glyph, name, size + reason. */
+.app-files .nopreview {
+  padding: 32px 16px 28px;
+  background: var(--card);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.app-files .nopreview .icon {
+  width: 40px;
+  height: 40px;
+  color: var(--grey);
+}
+
+.app-files .nopreview .name {
+  margin-top: 10px;
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.app-files .nopreview .meta {
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.app-files .note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Details card: the file name may be long. */
+.app-files .details .v { max-width: 65%; }
+.app-files .details .mono { font-size: 15px; }
+
+/* Error state: message + Try again. */
+.app-files .problem .empty { margin-bottom: 0; }
+.app-files .problem .button { margin-top: 12px; }
+
+@media (hover: hover) {
+  .app-files .row.tappable:not(.missing):hover { background: var(--track); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+}

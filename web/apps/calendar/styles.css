@@ -1,0 +1,443 @@
+/* Calendar app: month header, 7-column grid, day agenda, full-screen add/edit editor.
+   Every rule is scoped to .app-calendar (the launcher puts that class on the app root). */
+
+/* ------------------------------------------------------------------ month header */
+
+.app-calendar .cal-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.app-calendar .cal-month-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 0 0 2px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-calendar .cal-today-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--accent);
+  font-size: 17px;
+}
+
+.app-calendar .cal-nav-btn {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.app-calendar .cal-today-btn:active,
+.app-calendar .cal-nav-btn:active { opacity: 0.5; }
+
+/* ------------------------------------------------------------------ grid */
+
+.app-calendar .cal-month {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+  overflow: hidden;
+}
+
+.app-calendar .cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-calendar .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 6px 0 2px;
+}
+
+.app-calendar .cal-grid.slide-left { animation: cal-slide-left 180ms ease-out; }
+.app-calendar .cal-grid.slide-right { animation: cal-slide-right 180ms ease-out; }
+
+@keyframes cal-slide-left {
+  from { transform: translateX(14px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes cal-slide-right {
+  from { transform: translateX(-14px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+.app-calendar .cal-day {
+  height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 3px;
+  gap: 1px;
+  color: var(--text);
+}
+
+.app-calendar .cal-day .num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.app-calendar .cal-day.other .num { color: var(--muted); opacity: 0.55; }
+
+/* today: ringed; selected: filled; today + selected: filled red like iOS */
+.app-calendar .cal-day.today .num {
+  color: var(--red);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1.5px var(--red);
+}
+
+.app-calendar .cal-day[aria-pressed="true"] .num {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.app-calendar .cal-day.today[aria-pressed="true"] .num { background: var(--red); }
+
+.app-calendar .cal-day:active .num { opacity: 0.6; }
+
+.app-calendar .cal-day .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--grey);
+  visibility: hidden;
+}
+
+.app-calendar .cal-day.has-events .dot { visibility: visible; }
+.app-calendar .cal-day.has-events[aria-pressed="true"] .dot { background: var(--accent); }
+.app-calendar .cal-day.today.has-events[aria-pressed="true"] .dot { background: var(--red); }
+.app-calendar .cal-day.other .dot { opacity: 0.55; }
+
+/* ------------------------------------------------------------------ agenda */
+
+.app-calendar .cal-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 2px 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app-calendar .cal-day-head .tag {
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-calendar .cal-list { padding: 0 14px; }
+
+.app-calendar .cal-event {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 0;
+  text-align: left;
+  color: inherit;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-calendar .cal-event:last-child { border-bottom: 0; }
+.app-calendar .cal-event:active { opacity: 0.6; }
+
+.app-calendar .cal-when {
+  flex: 0 0 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app-calendar .cal-when .start {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.app-calendar .cal-bar {
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.app-calendar .cal-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.app-calendar .cal-title {
+  font-size: 17px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.app-calendar .cal-note {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ editor */
+
+.app-calendar .cal-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30; /* above the nav bar (8), below the kit sheet (40) and toast (50) */
+}
+
+.app-calendar .cal-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  animation: cal-fade-in 180ms ease both;
+}
+
+.app-calendar .cal-modal.out .cal-modal-backdrop { animation: cal-fade-out 160ms ease both; }
+
+.app-calendar .cal-editor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  animation: cal-editor-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.app-calendar .cal-modal.out .cal-editor { animation: cal-editor-down 160ms ease-in both; }
+
+.app-calendar .cal-editor-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr);
+  align-items: center;
+  height: var(--nav-h);
+  padding: calc(var(--sat) + var(--banner-h)) calc(4px + var(--sar)) 0 calc(4px + var(--sal));
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-calendar .cal-editor-bar h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.app-calendar .cal-cancel { justify-self: start; }
+.app-calendar .cal-save { justify-self: end; }
+
+.app-calendar .cal-editor-body {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px calc(16px + var(--sar)) calc(var(--sab) + 28px) calc(16px + var(--sal));
+}
+
+.app-calendar .cal-form { margin-bottom: 16px; }
+
+.app-calendar .cal-form .input.bare {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 12px 0;
+  min-height: 48px;
+}
+
+.app-calendar .cal-notes {
+  display: block;
+  min-height: 72px;
+  line-height: 1.4;
+}
+
+.app-calendar .cal-field {
+  cursor: pointer;
+  min-height: 48px;
+}
+
+.app-calendar .cal-field .label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-calendar .cal-field.cal-last { border-bottom: 0; }
+
+/* Native date / time controls: a tinted pill on the right, like iOS. */
+.app-calendar .cal-native {
+  flex: 0 0 auto;
+  margin-left: auto;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  text-align: right;
+}
+
+.app-calendar .cal-native::-webkit-date-and-time-value { text-align: right; min-height: 1.3em; }
+.app-calendar .cal-native::-webkit-calendar-picker-indicator { opacity: 0.6; margin-left: 4px; }
+.app-calendar .cal-native:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+/* iOS-style switch: a checkbox (visually hidden, still focusable) + track + knob. */
+.app-calendar .cal-switch {
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 51px;
+  height: 31px;
+  display: inline-block;
+}
+
+.app-calendar .cal-switch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.app-calendar .cal-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: var(--track);
+  transition: background 160ms ease;
+}
+
+.app-calendar .cal-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 160ms ease;
+}
+
+.app-calendar .cal-switch-input:checked + .cal-switch-track { background: var(--green); }
+.app-calendar .cal-switch-input:checked + .cal-switch-track .cal-switch-knob { transform: translateX(20px); }
+.app-calendar .cal-switch-input:focus-visible + .cal-switch-track { box-shadow: 0 0 0 2px var(--accent); }
+
+.app-calendar .cal-delete { margin-top: 8px; }
+
+@keyframes cal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes cal-editor-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes cal-editor-down { from { transform: none; } to { transform: translateY(100%); } }
+
+/* Wide screens: the editor becomes a centred dialog over a dimmed page. */
+@media (min-width: 700px) {
+  .app-calendar .cal-editor {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: min(560px, calc(100% - 48px));
+    max-height: min(720px, calc(100% - 48px));
+    transform: translate(-50%, -50%);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+    animation: cal-dialog-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .app-calendar .cal-modal.out .cal-editor { animation: cal-dialog-out 150ms ease-in both; }
+
+  .app-calendar .cal-editor-bar {
+    height: 52px;
+    padding: 0 8px;
+  }
+
+  .app-calendar .cal-editor-body { padding-bottom: 8px; }
+
+  .app-calendar .cal-day { height: 56px; }
+  .app-calendar .cal-day .num { width: 38px; height: 38px; }
+
+  @keyframes cal-dialog-in {
+    from { transform: translate(-50%, -50%) scale(0.96); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  @keyframes cal-dialog-out {
+    from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    to { transform: translate(-50%, -50%) scale(0.96); opacity: 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-calendar .cal-grid.slide-left,
+  .app-calendar .cal-grid.slide-right,
+  .app-calendar .cal-modal-backdrop,
+  .app-calendar .cal-editor { animation-duration: 1ms; }
+  .app-calendar .cal-switch-track,
+  .app-calendar .cal-switch-knob { transition: none; }
+}
+
+@media (hover: hover) {
+  .app-calendar .cal-day:hover .num { background: var(--fill); }
+  .app-calendar .cal-day[aria-pressed="true"]:hover .num { background: var(--accent); }
+  .app-calendar .cal-day.today[aria-pressed="true"]:hover .num { background: var(--red); }
+  .app-calendar .cal-event:hover { opacity: 0.8; }
+  .app-calendar .cal-today-btn:hover,
+  .app-calendar .cal-nav-btn:hover { opacity: 0.75; }
+}

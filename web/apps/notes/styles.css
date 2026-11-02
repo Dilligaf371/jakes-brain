@@ -1,0 +1,162 @@
+/* Notes app: list + search, and the editor (title + auto-growing body). Every rule is
+   scoped to .app-notes; colours come from the core variables (light + dark). */
+
+/* ------------------------------------------------------------------ list */
+
+.app-notes .notes-search-wrap { margin: 0 0 4px; }
+
+.app-notes .notes-search {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  background: var(--fill);
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 17px;
+}
+
+.app-notes .notes-search::placeholder { color: var(--muted); }
+.app-notes .notes-search:focus { box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.app-notes .notes-search::-webkit-search-decoration { -webkit-appearance: none; }
+
+/* The first section header sits closer to the search field than the usual 22px. */
+.app-notes .note-lists > .section-title:first-child { margin-top: 12px; }
+.app-notes .note-lists > .card:first-child { margin-top: 12px; }
+
+.app-notes .note-list { padding: 0 14px; }
+
+.app-notes .note-row { border-bottom: 1px solid var(--hair); }
+.app-notes .note-row:last-child { border-bottom: 0; }
+
+.app-notes .note-btn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 0;
+  text-align: left;
+  color: inherit;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.app-notes .note-btn:active {
+  background: var(--track);
+  margin: 0 -14px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.app-notes .note-row-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-notes .note-row-title.untitled { color: var(--muted); }
+
+.app-notes .note-row-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.app-notes .note-row-time {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-notes .note-row-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-notes .note-row-preview.none { font-style: italic; }
+
+@media (hover: hover) {
+  .app-notes .note-btn:hover .note-row-title { opacity: 0.8; }
+}
+
+/* ------------------------------------------------------------------ editor */
+
+.app-notes .note-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.app-notes .note-status {
+  margin: 0 0 10px;
+  min-height: 1.3em;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app-notes .note-title-input,
+.app-notes .note-body {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  color: var(--text);
+}
+
+.app-notes .note-title-input {
+  padding: 2px 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.app-notes .note-body {
+  padding: 2px 0;
+  font-size: 17px;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  min-height: 12em;
+}
+
+.app-notes .note-title-input::placeholder,
+.app-notes .note-body::placeholder { color: var(--muted); opacity: 1; }
+
+.app-notes .note-title-input:read-only,
+.app-notes .note-body:read-only { opacity: 0.7; }
+
+/* Blank space below the text: a tap there keeps writing at the end. Also leaves room for
+   the caret to scroll above the keyboard. */
+.app-notes .note-tail {
+  flex: 1 0 auto;
+  min-height: 40vh;
+}
+
+/* Pinned: the pin glyph fills in. */
+.app-notes .nav-btn[aria-pressed="true"] .icon path { fill: currentColor; }

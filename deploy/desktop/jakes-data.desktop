@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Jake's Data
+Comment=Jake's own apps on the PC: notes, tasks, calendar, graph, photos, videos and chat
+Exec=<home>/jakes-data-app/deploy/desktop/open.sh %u
+Icon=jakes-data
+Terminal=false
+Categories=Utility;
+Keywords=jake;data;notes;tasks;calendar;graph;
+StartupWMClass=JakesData
+StartupNotify=false
+Actions=graph;notes;jakegpt;
+
+[Desktop Action graph]
+Name=Graph
+Exec=<home>/jakes-data-app/deploy/desktop/open.sh graph
+
+[Desktop Action notes]
+Name=Notes
+Exec=<home>/jakes-data-app/deploy/desktop/open.sh notes
+
+[Desktop Action jakegpt]
+Name=JakeGPT
+Exec=<home>/jakes-data-app/deploy/desktop/open.sh jakegpt

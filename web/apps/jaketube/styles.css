@@ -1,0 +1,287 @@
+/* JakeTube app: home (chips + search + cards) and the watch page. */
+
+/* ------------------------------------------------------------------ home */
+
+.app-jaketube .tube-chips { margin-bottom: 6px; }
+
+.app-jaketube .tube-search { margin-bottom: 16px; }
+
+.app-jaketube .tube-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-jaketube .tube-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+}
+
+.app-jaketube .tube-card:active .tube-thumb { filter: brightness(0.82); }
+
+.app-jaketube .tube-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* 16:9 box with the JPEG (or a glyph while it is still being made), the duration pill and
+   the red watched bar. */
+.app-jaketube .tube-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--fill);
+  color: var(--muted);
+  transition: filter 120ms ease;
+}
+
+.app-jaketube .tube-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.app-jaketube .tube-thumb.portrait { background: #000; }
+.app-jaketube .tube-thumb.portrait img { object-fit: contain; }
+
+.app-jaketube .tube-thumb-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-jaketube .tube-dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-jaketube .tube-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.app-jaketube .tube-progress-fill {
+  height: 100%;
+  background: #e62117;
+}
+
+.app-jaketube .tube-card-text { padding: 9px 2px 0; }
+
+.app-jaketube .tube-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.app-jaketube .tube-card-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-jaketube .tube-note {
+  margin: 32px 8px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ watch */
+
+/* The player sits flush under the nav bar, edge to edge; the text below keeps the usual
+   side padding. */
+.app-jaketube .tube-watch { padding: var(--nav-h) 0 calc(var(--sab) + 28px); }
+
+.app-jaketube .tube-player { background: #000; }
+
+.app-jaketube .tube-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 72vh;
+  background: #000;
+  object-fit: contain;
+}
+
+.app-jaketube .tube-info,
+.app-jaketube .tube-aside {
+  padding: 0 calc(16px + var(--sar)) 0 calc(16px + var(--sal));
+}
+
+.app-jaketube .tube-info { padding-top: 14px; }
+
+.app-jaketube .tube-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.app-jaketube .tube-meta {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.app-jaketube .tube-resume {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: var(--fill);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-jaketube .tube-resume:active { opacity: 0.6; }
+
+.app-jaketube .tube-notice {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--red);
+}
+
+.app-jaketube .tube-upnext {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-jaketube .tube-up {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.app-jaketube .tube-up .tube-thumb {
+  flex: 0 0 150px;
+  width: 150px;
+  border-radius: 8px;
+}
+
+.app-jaketube .tube-up:active .tube-thumb { filter: brightness(0.82); }
+
+.app-jaketube .tube-up .tube-dur {
+  right: 5px;
+  bottom: 5px;
+  font-size: 11px;
+}
+
+.app-jaketube .tube-up-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.app-jaketube .tube-up-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.app-jaketube .tube-up-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-jaketube .tube-card,
+.app-jaketube .tube-up,
+.app-jaketube .tube-resume,
+.app-jaketube .tube-note {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ------------------------------------------------------------------ wide screens */
+
+@media (min-width: 700px) {
+  .app-jaketube .tube-home { max-width: 920px; }
+
+  .app-jaketube .tube-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 24px 18px;
+    align-items: start;
+  }
+
+  .app-jaketube .tube-watch { max-width: 760px; }
+}
+
+/* The watch page owns the window (root has `full-bleed`): the player and its text on the
+   left, Up next as a column on the right. */
+@media (min-width: 980px) {
+  .app-jaketube.full-bleed .tube-watch {
+    max-width: 1400px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas:
+      "player aside"
+      "info aside";
+    align-items: start;
+    column-gap: 24px;
+    padding: calc(var(--nav-h) + 20px) 24px calc(var(--sab) + 28px);
+  }
+
+  .app-jaketube.full-bleed .tube-player {
+    grid-area: player;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .app-jaketube.full-bleed .tube-video { max-height: calc(100vh - var(--nav-h) - 140px); }
+
+  .app-jaketube.full-bleed .tube-info {
+    grid-area: info;
+    padding: 14px 4px 0;
+  }
+
+  .app-jaketube.full-bleed .tube-aside {
+    grid-area: aside;
+    padding: 0;
+  }
+
+  .app-jaketube.full-bleed .tube-aside .section-title { margin-top: 0; }
+  .app-jaketube.full-bleed .tube-up .tube-thumb { flex-basis: 168px; width: 168px; }
+}
+
+@media (hover: hover) {
+  .app-jaketube .tube-card:hover .tube-thumb,
+  .app-jaketube .tube-up:hover .tube-thumb { filter: brightness(0.9); }
+  .app-jaketube .tube-resume:hover { opacity: 0.8; }
+}

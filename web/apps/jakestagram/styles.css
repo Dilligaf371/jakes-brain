@@ -1,0 +1,375 @@
+/* Jakestagram — private Instagram: edge-to-edge cards (media, heart, time, caption), a
+   3-column profile grid and a compose screen. Every rule is scoped to .app-jakestagram. */
+
+.app-jakestagram {
+  --gram-bg: #ffffff;
+  --gram-media-bg: #e5e5ea;
+  --gram-pink: #e1306c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-jakestagram {
+    --gram-bg: #000000;
+    --gram-media-bg: #1c1c1e;
+  }
+}
+
+/* The feed column: no side padding (media runs edge to edge), white like Instagram. */
+.app-jakestagram .app-content.gram-content {
+  max-width: 540px;
+  min-height: 100vh;
+  padding: var(--nav-h) var(--sar) calc(var(--sab) + 40px) var(--sal);
+  background: var(--gram-bg);
+}
+
+/* ------------------------------------------------------------------ nav bar segments */
+
+.app-jakestagram .gram-segments { vertical-align: middle; }
+.app-jakestagram .gram-segments > button { min-width: 72px; }
+
+/* ------------------------------------------------------------------ cards */
+
+.app-jakestagram .gram-card {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 4px;
+}
+
+.app-jakestagram .gram-card:last-child { border-bottom: 0; }
+
+.app-jakestagram .gram-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 6px 0 12px;
+}
+
+.app-jakestagram .gram-avatar {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gram-pink);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app-jakestagram .gram-avatar.big {
+  width: 84px;
+  height: 84px;
+  font-size: 38px;
+}
+
+.app-jakestagram .gram-user {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app-jakestagram .gram-more {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.app-jakestagram .gram-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--gram-media-bg);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.app-jakestagram .gram-media img,
+.app-jakestagram .gram-media video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.app-jakestagram .gram-img { object-fit: cover; }
+
+.app-jakestagram .gram-video {
+  object-fit: contain;
+  background: #000;
+}
+
+.app-jakestagram .gram-bigheart {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  color: #fff;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.35));
+}
+
+.app-jakestagram .gram-bigheart .icon { width: 96px; height: 96px; }
+.app-jakestagram .gram-bigheart .icon path { fill: currentColor; }
+.app-jakestagram .gram-bigheart.show { animation: gram-pop 720ms ease-out both; }
+
+@keyframes gram-pop {
+  0% { opacity: 0; transform: scale(0.5); }
+  18% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+.app-jakestagram .gram-actions {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 12px 0 4px;
+}
+
+.app-jakestagram .gram-heart {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.app-jakestagram .gram-heart .icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 120ms ease;
+}
+
+.app-jakestagram .gram-heart:active .icon { transform: scale(0.85); }
+.app-jakestagram .gram-heart[aria-pressed="true"] { color: var(--red); }
+.app-jakestagram .gram-heart[aria-pressed="true"] .icon path { fill: currentColor; }
+
+.app-jakestagram .gram-time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-jakestagram .gram-caption {
+  padding: 0 12px 4px;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.app-jakestagram .gram-caption-text { white-space: pre-wrap; }
+
+/* ------------------------------------------------------------------ status / empty */
+
+.app-jakestagram .gram-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 10px 16px;
+}
+
+.app-jakestagram .gram-status:empty { display: none; }
+.app-jakestagram .gram-sentinel { height: 1px; }
+
+.app-jakestagram .gram-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 0;
+}
+
+.app-jakestagram .gram-empty .empty { margin: 36px 0 4px; }
+
+.app-jakestagram .gram-link {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------ profile */
+
+.app-jakestagram .gram-profile {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 18px 16px 16px;
+}
+
+.app-jakestagram .gram-profile-meta { flex: 1 1 auto; min-width: 0; }
+
+.app-jakestagram .gram-profile-name {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.app-jakestagram .gram-stats {
+  display: flex;
+  gap: 26px;
+}
+
+.app-jakestagram .gram-stat { text-align: center; }
+
+.app-jakestagram .gram-stat b {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.app-jakestagram .gram-stat span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-jakestagram .gram-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+
+.app-jakestagram .gram-cell {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--gram-media-bg);
+}
+
+.app-jakestagram .gram-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.app-jakestagram .gram-cell:active img { opacity: 0.8; }
+
+.app-jakestagram .gram-cell-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+  display: inline-flex;
+}
+
+.app-jakestagram .gram-cell-badge .icon path { fill: currentColor; }
+
+/* ------------------------------------------------------------------ compose */
+
+.app-jakestagram .gram-picker {
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 340px;
+  border: 1.5px dashed var(--grey);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--card);
+}
+
+.app-jakestagram .gram-picker:active { opacity: 0.6; }
+
+.app-jakestagram .gram-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 440px;
+  background: var(--gram-media-bg);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.app-jakestagram .gram-preview img,
+.app-jakestagram .gram-preview video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.app-jakestagram .gram-preview img { background: var(--gram-media-bg); }
+
+/* Under the preview: "IMG_0001.jpg · 2.3 MB" on the left, Change on the right. */
+.app-jakestagram .gram-change {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.app-jakestagram .gram-change .gram-link { margin-left: auto; padding-right: 2px; }
+
+.app-jakestagram .gram-preview-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-jakestagram .gram-caption-input {
+  margin-top: 10px;
+  min-height: 92px;
+  overflow: hidden;
+}
+
+.app-jakestagram .gram-progress { margin: 16px 0 0; }
+
+.app-jakestagram .gram-upload-status {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 1.3em;
+}
+
+@media (hover: hover) {
+  .app-jakestagram .gram-heart:hover,
+  .app-jakestagram .gram-more:hover,
+  .app-jakestagram .gram-link:hover,
+  .app-jakestagram .gram-picker:hover { opacity: 0.75; }
+  .app-jakestagram .gram-cell:hover img { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-jakestagram .gram-bigheart.show { animation-duration: 1ms; }
+  .app-jakestagram .gram-heart .icon { transition: none; }
+}
