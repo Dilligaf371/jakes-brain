@@ -7,7 +7,11 @@ OWNER=$(gh api user --jq .login)
 REPO="$OWNER/jakes-brain"
 gh repo view "$REPO" >/dev/null 2>&1 || gh repo create "$REPO" --private --description "Jake's Brain: personal app"
 [ "$(gh repo view "$REPO" --json visibility --jq .visibility)" = "PRIVATE" ] || { echo "Repo is not private. Stopping."; exit 1; }
-git remote get-url origin >/dev/null 2>&1 || git remote add origin "git@github.com:$REPO.git"
+# The Mac signs in through gh, not SSH. This applies to this repo only.
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://github.com/$REPO.git"
+git remote set-url origin "https://github.com/$REPO.git"
+git config --local --replace-all credential.helper ''
+git config --local --add credential.helper '!gh auth git-credential'
 git push -q -u origin main
 echo "1/4 code pushed to private repo $REPO"
 
