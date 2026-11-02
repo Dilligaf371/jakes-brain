@@ -39,12 +39,13 @@ async function feed(dir) {
     for (const item of Object.values(state?.postedItems?.[a.id] || {})) if (item?.at) stamps.push(item.at);
     return {
       id: a.id, name: a.name || a.id, platform: a.platform || '', handle: a.handle || '',
-      enabled: control?.enabled ? control.enabled[a.id] !== false : true,
+      enabled: control?.enabled ? control.enabled[a.id] === true : true,
       queued: Array.isArray(queue?.items) ? queue.items.filter((item) => item.status === 'queued').length : null,
       last_post: stamps.sort().at(-1) || null,
     };
   }));
-  return { live: control?.live !== false, accounts: rows };
+  // Accounts planned but never switched on are noise here.
+  return { live: control?.live !== false, accounts: rows.filter((a) => a.enabled || a.last_post) };
 }
 
 export default {

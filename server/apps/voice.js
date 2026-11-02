@@ -41,7 +41,7 @@ export default {
       const fail = (error) => db.prepare("UPDATE voice_memos SET status = 'failed', error = ? WHERE id = ?").run(String(error).slice(0, 300), id);
       if (!python || !fs.existsSync(python)) return fail('Transcription is not set up on this machine.');
       const out = await tools.run(python, [SCRIPT, path.join(dir, memo.file)], {
-        timeout: 20 * 60_000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, WHISPER_MODEL: cfg.voice?.model || 'small.en' },
+        timeout: 20 * 60_000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, WHISPER_MODEL: cfg.voice?.model || 'small.en', JAKESDATA_FFMPEG: tools.ffmpeg || '' },
       });
       if (out.code !== 0) return fail(out.timedOut ? 'Transcription took too long.' : (out.stderr || out.error || 'Transcription failed.').trim().split('\n').at(-1));
       let result;
