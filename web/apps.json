@@ -1,0 +1,17 @@
+{
+  "dock": ["notes", "jakestagram", "jaketube", "jakegpt"],
+  "grid": ["calendar", "tasks", "habits", "weather", "files", "server", "settings"],
+  "apps": {
+    "notes":       { "label": "Notes",       "color": "#ffcc00" },
+    "tasks":       { "label": "Tasks",       "color": "#5e5ce6", "badge": "/api/tasks/badge" },
+    "calendar":    { "label": "Calendar",    "color": "#ffffff", "tile": "calendar" },
+    "jakestagram": { "label": "Jakestagram", "color": "#e1306c" },
+    "jaketube":    { "label": "JakeTube",    "color": "#e62117" },
+    "jakegpt":     { "label": "JakeGPT",     "color": "#10a37f" },
+    "habits":      { "label": "Habits",      "color": "#ff9f0a" },
+    "files":       { "label": "Files",       "color": "#0a84ff" },
+    "weather":     { "label": "Weather",     "color": "#32ade6" },
+    "server":      { "label": "Server",      "color": "#34c759" },
+    "settings":    { "label": "Settings",    "color": "#8e8e93" }
+  }
+}

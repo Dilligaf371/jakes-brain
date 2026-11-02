@@ -48,175 +48,326 @@ jakes-data-app/
     run-sim.sh       build + run in the booted simulator
 ```
 
-## Server (server/)
 
-- Entry `node server/index.js`. Env: `JAKESDATA_PORT` (default 4800), `JAKESDATA_DATA` (default
-  `$HOME/jakes-data-app-data`), `JAKESDATA_WEB` (default `<repo>/web`), `JAKESDATA_BIND` (default `0.0.0.0`).
-- Creates `JAKESDATA_DATA` if missing; DB file `JAKESDATA_DATA/jakesdata.db` via `node:sqlite`
-  `DatabaseSync` (available unflagged on Node 22.23). WAL mode. Migrations table.
-- Static: serves files under `JAKESDATA_WEB`. `Cache-Control: no-store` for `.html .js .css
-  .webmanifest .json`; `public, max-age=86400` for icons/images. Unknown non-/api path
-  -> `index.html` (SPA). Path traversal rejected.
-- JSON API, all responses `application/json; charset=utf-8`. Errors: `{ "error":
-  "message" }` with 4xx/5xx. CORS: allow `*` (the web app may be opened from the
-  Mac during dev). Request bodies JSON, max 64 KB.
-- Logs one line per request to stdout: `METHOD path status ms`.
+## v2: a home screen inside the app
 
-### Endpoints
+Jake's Data v2 is a **launcher**: the first screen is an iPhone-style home screen (a grid of
+app tiles + a dock). Tapping a tile opens one of Jake's own apps full-screen. Every app is a
+small ES module under `web/apps/<id>/` plus (if it needs data) a server module
+`server/apps/<id>.js`. Nothing native changes; the shell is a WKWebView with inline media
+playback and photo/camera pickers enabled.
 
-| method+path | behaviour |
-|---|---|
-| `GET /api/health` | `{ ok: true, name: "jakes-data", host: <hostname>, time: <ISO> }` fast, no shelling out |
-| `GET /api/version` | `{ build: <string>, started: <ISO>, node: <process.version> }`. `build` = short git sha of the repo if `git rev-parse --short HEAD` works (cached 10 s), else the max mtime (ms) of files under `web/` as a string. **Web app polls this; when `build` changes it reloads.** So `build` MUST also change when `web/` files change without a commit: final `build` = `${gitsha or 'nogit'}-${maxMtimeOfWeb}`. |
-| `GET /api/status` | machine + services, see shape below. Must complete < 1.5 s; each systemctl call has a 1 s timeout; never throws, missing pieces are `null`. |
-| `GET /api/notes` | `{ notes: [Note] }` ordered: open first (newest first), then done (newest first) |
-| `POST /api/notes` | body `{ text }` (trimmed, 1..2000 chars) -> `201 { note: Note }` |
-| `PATCH /api/notes/:id` | body `{ text?, done? }` -> `{ note: Note }`; 404 if missing |
-| `DELETE /api/notes/:id` | `204`; 404 if missing |
+### The apps (ids are fixed — `web/apps.json` is written already, do not edit it)
 
-`Note = { id: number, text: string, done: boolean, created_at: ISO, updated_at: ISO }`
+| id | label | tile colour | what it is |
+|---|---|---|---|
+| `notes` | Notes | #ffcc00 | real notes: title + body, autosave, search, pin |
+| `tasks` | Tasks | #5e5ce6 | the v1 checklist (the old `notes` table, renamed `tasks`); badge = open count |
+| `calendar` | Calendar | white tile, red day number (like iOS) | month grid + day agenda + events |
+| `jakestagram` | Jakestagram | #e1306c | private Instagram: post photos/videos from the phone, feed + grid profile, hearts |
+| `jaketube` | JakeTube | #e62117 | private YouTube over the PC's videos (daily auto-vlogs, raw Pocket 3, game captures) |
+| `jakegpt` | JakeGPT | #10a37f | private ChatGPT on the PC's Ollama (streaming), conversations saved |
+| `habits` | Habits | #ff9f0a | daily habits, streaks, 7-day strip |
+| `files` | Files | #0a84ff | read-only browser of PC folders with image/video/text preview |
+| `weather` | Weather | #32ade6 | Open-Meteo forecast for a city set in Weather/Settings |
+| `server` | Server | #34c759 | the v1 Home screen: PC stats + one row per service |
+| `settings` | Settings | #8e8e93 | the v1 About screen + per-app settings (weather city, JakeGPT model) |
 
-`GET /api/status` shape:
-```json
-{
-  "host": "jacob-beauchamp-MS-7C02",
-  "time": "2026-10-30T18:00:00.000Z",
-  "uptime_s": 123456,
-  "load": [0.5, 0.4, 0.3],
-  "mem": { "total": 67000000000, "used": 21000000000 },
-  "disk": { "path": "/", "total": 490000000000, "used": 410000000000 },
-  "addresses": { "tailscale": "100.106.249.89", "lan": "192.168.1.81" },
-  "services": [
-    { "unit": "pocket3-vlog.service", "label": "Pocket 3 recorder", "active": "active", "since": "2026-10-29T..." }
-  ]
-}
+Dock (bottom, always visible on the home screen): `notes`, `jakestagram`, `jaketube`, `jakegpt`.
+Grid order: `calendar`, `tasks`, `habits`, `weather`, `files`, `server`, `settings`.
+
+## Web (web/) — core contract
+
 ```
-- `uptime_s`, `load`, `mem` from `node:os`. `disk` from `fs.statfs('/')`.
-- `addresses` from `os.networkInterfaces()`: tailscale = first IPv4 starting `100.`
-  on an interface named `tailscale*`; lan = first non-internal IPv4 on another iface.
-- `services` = the list in `server/config.json`, each queried with
-  `systemctl --user show <unit> -p ActiveState -p ActiveEnterTimestamp` (fall back to
-  system scope for units with `"scope": "system"`). `active` is one of
-  `active | inactive | failed | activating | deactivating | unknown`. On the Mac (no
-  systemctl) every service is `unknown` and the endpoint still returns 200.
-
-`server/config.json`:
-```json
-{
-  "services": [
-    { "unit": "boost-tracker.service",    "label": "Reels tracker" },
-    { "unit": "boost-tracker-yt.service", "label": "YouTube ingest" },
-    { "unit": "pocket3-vlog.service",     "label": "Pocket 3 recorder" },
-    { "unit": "pocket3-autovlog.service", "label": "Auto-vlog builder" },
-    { "unit": "feed-accounts.service",    "label": "Feed accounts" },
-    { "unit": "zora-bot.service",         "label": "Zora bot" },
-    { "unit": "ollama.service",           "label": "Ollama" },
-    { "unit": "jakes-data.service",               "label": "Jake's Data (this app)" }
-  ]
-}
+web/
+  index.html        shell: #home (launcher), #app (active app layer), #banner (offline), #toast, #sheet
+  styles.css        core: launcher, nav bar, shared components, light+dark, safe areas
+  kit.js            shared helpers (below) — every app imports from '../../kit.js'
+  launcher.js       home screen, hash router, app lifecycle, badges, build-change reload
+  apps.json         registry (fixed)
+  icons/app-<id>.svg   tile glyphs: 64x64 viewBox, white strokes/fills on transparent, 2px-ish strokes,
+                    simple geometric shapes (think SF Symbols), NO gradients, NO emoji, NO clip-art
+  apps/<id>/index.js   export default { mount(root, ctx), unmount(), route(sub) }   (route optional)
+  apps/<id>/styles.css every selector prefixed with `.app-<id> ` (the launcher adds that class to root)
 ```
 
-## Web app (web/)
+- **No framework, no bundler.** ES modules, `import` relative paths. Each app's `index.js` is
+  loaded with `import('./apps/<id>/index.js')` the first time it opens; its `styles.css` is
+  injected once as a `<link>`.
+- **Routing:** `location.hash` is the source of truth. `#/` = home. `#/<id>` opens an app;
+  `#/<id>/<sub...>` is passed to the app as `sub` (`"42"`, `"2026-11"`, `"watch/abc"`). On a hash
+  change inside the same app the launcher calls `app.route(sub)` if defined, otherwise
+  unmount + mount. Browser back works (history). `ctx.nav.go('#/notes/42')`, `ctx.nav.back()`
+  (history.back() if the previous entry was inside the same app, else home), `ctx.nav.home()`.
+- **Launcher look (iPhone-like, calm):** plain background (light #f2f2f7 / dark #000, same as
+  v1), a small date line at the top ("Sunday, November 2"), a 4-column grid of 60×60 tiles with
+  14px corner radius and 11px labels, a dock (4 tiles, rounded 24px bar, slightly tinted
+  background) pinned to the bottom above the safe area. Tile = solid colour + the SVG glyph
+  (white) at 56% size, except `calendar` which draws the current weekday (red, small caps) and
+  day number (large, black/white) on a white (dark: #1c1c1e) tile. Tap → the #app layer scales
+  in from the tile (transform-origin at the tile centre, 220 ms) and the home dims; back → reverse.
+  Badges: an entry in apps.json may have `"badge": "/api/tasks/badge"`; the launcher fetches it
+  when the home screen is shown and draws a red count badge (hidden when 0).
+- **App nav bar** (via `kit.navbar`): fixed at top with safe-area padding; left = `‹ Home`
+  (or `‹ Back` when the app is deeper than its root — the app passes `back: true`), centre
+  title, right = optional action buttons. Content scrolls under it; apps pad their content with
+  `var(--nav-h)` (the kit sets it).
+- **Build-change reload** (from v1) stays: poll `/api/version` every 30 s and on
+  `jakesdata:foreground`; reload when `build` changes, but NOT while `kit.holdReload(key)` is
+  held (typing in a field, an upload in flight, a video playing, a chat streaming). Apps must
+  hold/release around those.
+- **Offline banner + backoff** (from v1) stays and is global.
+- **Native bridge** (from v1): `window.JakesData = { native, version }` and
+  `window.webkit?.messageHandlers?.native?.postMessage({type:'haptic', style})` — only via
+  `kit.haptic()`.
+- **Confirm dialogs:** never `window.confirm`/`alert`/`prompt` (the shell has no WKUIDelegate —
+  they silently return false). Use `kit.confirmSheet(...)`.
+- Design rules: system font stack, light + dark via `prefers-color-scheme`, solid colours only,
+  no gradients, no emoji as icons, no decorative illustration, 44px tap targets, inputs ≥ 16px
+  font (no zoom), `env(safe-area-inset-*)` everywhere it matters. Jake rejects AI-looking UI.
 
-- Files: `index.html`, `app.js`, `styles.css`, `manifest.webmanifest`,
-  `icons/icon-180.png`, `icons/icon-512.png`, `icons/favicon.png` (icons already exist).
-- No framework, no bundler, ES2020 modules are fine. Must look right at 390x844 with
-  the iPhone notch (`viewport-fit=cover`, pad with `env(safe-area-inset-*)`).
-  `<meta name="apple-mobile-web-app-capable" content="yes">`, status bar
-  `black-translucent`, theme-color matching the background in both schemes.
-- Design: calm and plain. System font stack (`-apple-system, ...`). Light + dark via
-  `prefers-color-scheme`. No gradients, no emoji as icons, no decorative illustration.
-  Bottom tab bar with three tabs: **Home**, **Notes**, **About**. Tabs are plain text
-  labels with a small SF-Symbol-like inline SVG (simple strokes) — keep it minimal.
-- **Home**: a compact machine card (host, uptime like "3d 4h", load, mem used/total in
-  GB, disk used/total with a thin bar) then **one row per service**: status dot
-  (green active, grey inactive/unknown, red failed, amber activating), label, and the
-  since-time as relative ("2d", "4h", "12m") on the right. Pull the list from
-  `/api/status` on open, on tab switch, every 30 s while visible, and on
-  `jakesdata:foreground`. Show a subtle "updated 12s ago" line.
-- **Notes**: a single-line input at the top with an Add button (Enter also adds);
-  list of notes; tapping the round checkbox toggles `done` (done notes go to a
-  "Done" section below, struck through, muted); a small "×" on each row deletes
-  after a quick confirm (`confirm()` is fine). Optimistic updates; on failure revert
-  and show a toast. Empty state text: "Nothing here yet."
-- **About**: server base URL in use, `build` from `/api/version`, server start time,
-  native shell version (from `window.JakesData.version` if present, else "web"), a
-  "Reload" button, and a short "How to update" blurb: *Edit `web/` or `server/` in
-  `~/jakes-data-app` on the PC (or run `deploy/deploy.sh` from the Mac). The app refreshes itself
-  within 30 seconds.*
-- **Live update**: poll `/api/version` every 30 s (and on `jakesdata:foreground`); if `build`
-  differs from the one loaded with the page, `location.reload()`.
-- **Unreachable**: if a fetch fails, show a thin top banner "Can't reach the PC —
-  retrying…" and keep retrying with backoff (2s, 4s, 8s, max 30s). Never a blank page.
-- Native bridge (optional, feature-detect): `window.JakesData` is injected by the iOS shell:
-  `{ native: true, version: "1.0 (1)" }`. To buzz:
-  `window.webkit?.messageHandlers?.native?.postMessage({ type: "haptic", style: "light" | "medium" | "success" | "error" })`.
-  Call it on note toggle (light) and add (success). Guard everything; on the Mac
-  `window.JakesData` is undefined.
-- All API calls are relative (`/api/...`) — the page is always served by the same
-  server, so no base URL config in the web app.
+### kit.js (the core builder writes this; apps rely on exactly these names)
 
-## iOS shell (ios/)
+```js
+export async function api(path, { method='GET', body, timeout=8000, headers={}, raw=false } = {})
+  // JSON in/out, relative /api paths, AbortController timeout, throws ApiError { status, message }
+  // raw=true returns the Response (for streams)
+export function upload(path, file, { onProgress, headers={}, timeout=180000 } = {})
+  // XHR PUT of the raw file body (Content-Type = file.type, X-Filename header), resolves JSON; onProgress(0..1)
+export function el(tag, attrs = {}, ...children)   // attrs: class, text, html(escaped already), on:click, dataset..., style object
+export function esc(str)
+export const fmt = { relTime(iso), date(iso|Date, {weekday,month,day,year,time}), time(iso), duration(seconds), bytes(n), dayKey(Date) /* 'YYYY-MM-DD' local */ }
+export function toast(message, { kind='info'|'error', ms=2200 } = {})
+export function haptic(style)                           // 'light'|'medium'|'success'|'error'
+export function confirmSheet({ title, message, confirmLabel='OK', destructive=false }) // Promise<boolean>, bottom sheet
+export function navbar({ title, back=false, right=[] /* array of elements */, onBack }) // returns element; the app puts it first in root
+export function section(title)                          // small caps header like v1 "SERVICES"
+export function emptyState(text)
+export function holdReload(key) / releaseReload(key)
+export const store = { get(key, fallback), set(key, value), del(key) }   // localStorage JSON, try/catch
+export function debounce(fn, ms)
+export function renderMarkdownLite(text) // escapes, then **bold**, `code`, ```blocks```, - lists, paragraphs → HTML string
+```
 
-- `ios/project.yml` (xcodegen 2.46): name `Jake's Data`, bundleIdPrefix `com.jakebeau`,
-  deploymentTarget iOS 17.0, one target `Jake's Data` (application, iOS), sources `Jake's Data`,
-  settings: `PRODUCT_BUNDLE_IDENTIFIER com.jakebeau.jakesdata`, `GENERATE_INFOPLIST_FILE YES`,
-  `INFOPLIST_KEY_CFBundleDisplayName Jake's Data`, `INFOPLIST_KEY_UILaunchScreen_Generation YES`,
-  `INFOPLIST_KEY_UIApplicationSceneManifest_Generation YES`,
-  `INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone UIInterfaceOrientationPortrait`,
-  `ASSETCATALOG_COMPILER_APPICON_NAME AppIcon`,
-  `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME AccentColor`,
-  `TARGETED_DEVICE_FAMILY "1"`, `SWIFT_VERSION "5.0"`, `CURRENT_PROJECT_VERSION 1`,
-  `MARKETING_VERSION "1.0"`, `CODE_SIGN_STYLE Automatic`, `DEVELOPMENT_TEAM 3VTHP9BHH6`.
-  Info properties: `NSAppTransportSecurity: { NSAllowsArbitraryLoads: true }` (plain
-  http to private IPs — personal app, not for the App Store),
-  `ITSAppUsesNonExemptEncryption: false`, `NSLocalNetworkUsageDescription` (iOS asks before the
-  first LAN connection).
-- Files in `ios/JakesData/`:
-  - `JakesDataApp.swift` — `@main`, `WindowGroup { RootView() }`, watches `scenePhase`.
-  - `Config.swift` — `enum Config { static let candidates: [URL] = [tailscale, lan];
-    static let healthPath = "/api/health"; static let healthTimeout: TimeInterval = 2.5 }`
-    plus a `UserDefaults` override key `jakesdata.baseURL` (string) that, if set, is tried first.
-  - `ServerLocator.swift` — `actor` or `final class`: `func locate() async -> URL?`:
-    tries the last-good URL first (UserDefaults `jakesdata.lastGoodURL`), then races all
-    candidates with `URLSession` GETs to `/api/health` (timeout `Config.healthTimeout`,
-    `cachePolicy .reloadIgnoringLocalCacheData`); first 200 whose JSON has `ok == true`
-    wins; store as last-good. Returns nil if none.
-  - `RootView.swift` — state machine `enum Phase { case locating, loaded(URL), unreachable([URL]) }`.
-    `locating` shows a plain ProgressView with "Finding the PC…". `loaded` shows
-    `WebShell(url:)`. `unreachable` shows `UnreachableView` (title "Can't reach the PC",
-    the addresses tried, one-line hint "Join Tailscale on this phone or connect to home
-    WiFi.", a Retry button). On `scenePhase == .active` after being in background:
-    if phase is `.loaded`, post `jakesdata:foreground` into the page via
-    `evaluateJavaScript("window.dispatchEvent(new Event('jakesdata:foreground'))")`; if
-    `.unreachable`, retry locate.
-  - `WebShell.swift` — `UIViewRepresentable` around `WKWebView`:
-    `WKWebViewConfiguration` with `userContentController` adding a script message
-    handler named `native` (messages `{type:"haptic", style}` -> `UIImpactFeedbackGenerator`
-    / `UINotificationFeedbackGenerator`) and a `WKUserScript` at document start
-    injecting `window.JakesData = { native: true, version: "<MARKETING_VERSION> (<BUILD>)" }`
-    read from `Bundle.main.infoDictionary`. `allowsBackForwardNavigationGestures =
-    false`, `scrollView.contentInsetAdjustmentBehavior = .never` (the web app handles
-    safe areas), `isOpaque = false`, `backgroundColor = .systemGroupedBackground` (matches the page's
-    #f2f2f7 / #000 so rubber-band overscroll shows the same colour),
-    `scrollView.bounces = true`, `isInspectable = true` (iOS 16.4+, lets Safari on the
-    Mac inspect the page). `UIRefreshControl` on `scrollView` → `reload()`.
-    Navigation delegate: main-frame navigations to a different host than the base URL,
-    (compare origin: scheme+host+port, so other services on the PC open in Safari too)
-    or `target=_blank` (`navigationAction.targetFrame == nil`), open in Safari via
-    `UIApplication.shared.open` and cancel. `didFailProvisionalNavigation` with a
-    network error → the coordinator reports up so `RootView` goes `.unreachable`
-    (ignore `NSURLErrorCancelled`). The web view ignores the system font size
-    multiplier? No — leave default.
-  - `UnreachableView.swift` — SwiftUI, system styling only.
-  - `Assets.xcassets/` — `AppIcon.appiconset` (single 1024 universal `icon-1024.png`,
-    already provided at `ios/JakesData/Assets.xcassets/AppIcon.appiconset/icon-1024.png` with a
-    correct `Contents.json`) and `AccentColor.colorset` (any neutral, e.g. systemBlue
-    default is fine).
-- The app must compile warning-clean with `xcodebuild -project ios/JakesData.xcodeproj -scheme
-  Jake's Data -destination 'generic/platform=iOS Simulator' -configuration Debug build
-  CODE_SIGNING_ALLOWED=NO`. Generate the project with `cd ios && xcodegen generate`.
-- Light + dark follow the system (`UIUserInterfaceStyle` unset).
+`ctx` passed to `mount(root, ctx)`: `{ id, sub, nav: {go, back, home}, kit }` (kit = the whole
+module, so apps can also just import it). `root` is an empty `<div class="app-<id>">` already
+inside `#app`. `unmount()` must clear timers/listeners/holds.
+
+## Server (server/) — core contract
+
+```
+server/
+  index.js      http server; static web/; /media/*; router; loads server/apps/*.js; SIGTERM
+  db.js         DatabaseSync (WAL, busy_timeout 250) + migrations registry; applies CORE migrations
+                first, then each module's migrations in module-id alphabetical order; table
+                `migrations(id TEXT PRIMARY KEY, applied_at)`; ids are strings like 'core-2', 'notes-1'
+  router.js     register(method, pattern, handler); ':param' segments; query parsing; 404/405 JSON
+  http.js       sendJson(res, status, obj), sendError(res, status, msg), readJsonBody(req, {limit=65536}),
+                readRawBody(req, {limit}), sendFile(req, res, absPath, {cacheControl, download}) with
+                HTTP Range support (206, Accept-Ranges, Content-Range, HEAD), cors(res)
+  tools.js      resolve ffmpeg/ffprobe: env JAKESDATA_FFMPEG / JAKESDATA_FFPROBE, else config.tools, else
+                PATH, else null; run(cmd, args, {timeout, maxBuffer}) → {stdout, stderr, code};
+                fetchJson(url, {timeout}) via global fetch (Node 22)
+  status.js     v1 machine status (unchanged)
+  config.json   see below; env JAKESDATA_CONFIG overrides the path (tests use a scratch copy)
+  apps/<id>.js  export default { id, migrations: [{ id, sql }], register(r, ctx) }
+                ctx = { db, cfg, dataDir, mediaDir(appId) /* DATA/media/<id>, created */, cacheDir, tools, log, homeDir }
+```
+
+- Still **zero npm dependencies**, Node 22 only (`node:http`, `node:sqlite`, `node:fs`,
+  `node:path`, `node:os`, `node:child_process`, global `fetch`).
+- Env: `JAKESDATA_PORT` 4800, `JAKESDATA_DATA` `$HOME/jakes-data-app-data`, `JAKESDATA_WEB`,
+  `JAKESDATA_BIND`, `JAKESDATA_CONFIG`, `JAKESDATA_OLLAMA` (default `http://127.0.0.1:11434`),
+  `JAKESDATA_FFMPEG`, `JAKESDATA_FFPROBE`.
+- Data layout: `DATA/jakesdata.db`, `DATA/media/<app>/…` (uploads), `DATA/cache/<app>/…`
+  (regenerable: thumbnails). `GET /media/<app>/<file>` serves `DATA/media/<app>/<file>` with
+  Range support; `GET /cache/<app>/<file>` likewise. Both reject traversal (realpath must stay
+  inside), hide dotfiles.
+- Core routes (unchanged shapes from v1): `GET /api/health` (name "jakes-data"),
+  `GET /api/version`, `GET /api/status`. New core: `GET /api/settings` → `{ settings: {k: v} }`,
+  `PATCH /api/settings` body `{k: v, ...}` (values are JSON, strings/numbers/booleans/null;
+  null deletes) — table `settings(key TEXT PRIMARY KEY, value TEXT, updated_at)`.
+  Core migration `core-2`: `ALTER TABLE notes RENAME TO tasks` (only if `notes` exists and
+  `tasks` does not), so the v1 checklist data survives under the Tasks app.
+- Static rules from v1 stay (no-store for html/js/css/json/webmanifest/svg, max-age for png/jpg,
+  SPA fallback only for paths without a file extension, traversal/symlink rejection).
+- Errors: `{ "error": "message" }`; never crash on a bad request; log `METHOD path status ms`.
+- Shelling out: always `execFile` with an args array (never a shell string), timeouts, and a
+  concurrency cap of 1 for ffmpeg jobs (a tiny in-process queue in tools.js: `tools.queue(fn)`).
+
+### config.json (core builder writes this; app builders READ it and may rely on these keys)
+
+```json
+{
+  "services": [ ...v1 list unchanged, with "jakes-data.service" labelled "Jake's Data (this app)" ],
+  "tools": { "ffmpeg": "/home/jacob-beauchamp/pocket3-vlog/bin/ffmpeg", "ffprobe": "/home/jacob-beauchamp/pocket3-vlog/bin/ffprobe" },
+  "fileRoots": [
+    { "name": "Videos",     "path": "~/Videos" },
+    { "name": "Pictures",   "path": "~/Pictures" },
+    { "name": "Downloads",  "path": "~/Downloads" },
+    { "name": "Boost data", "path": "~/boost_data" }
+  ],
+  "videoChannels": [
+    { "id": "vlogs", "name": "Daily Vlogs",   "paths": ["~/Videos/pocket3-vlog/vlogs"], "recursive": false },
+    { "id": "raw",   "name": "Pocket 3 raw",  "paths": ["~/Videos/pocket3-vlog"],       "recursive": false },
+    { "id": "games", "name": "Game captures", "paths": ["~/Videos/Fortnite", "~/Videos/Call of Duty  Modern Warfare 2019", "~/Videos/Captures"], "recursive": true },
+    { "id": "boost", "name": "Boost",         "paths": ["~/Videos/boost"], "recursive": true }
+  ],
+  "gpt": { "defaultModel": "qwen3.5:9b", "system": "You are JakeGPT, Jake's private assistant running on his own PC. Be direct and concise." },
+  "weather": { "units": "fahrenheit" }
+}
+```
+`~` expands to the server user's home. Missing folders are skipped silently (on the Mac none
+of them exist). Note `~/Videos/pocket3-vlog/vlogs` holds symlinks (`2026-10-14.mp4 → …/.work/vlog-2026-10-14.mp4`,
+plus `latest.mp4` pointing at the newest): follow symlinks, dedupe by realpath, and drop the
+`latest.mp4` alias.
+
+## App contracts
+
+Every app: its own `web/apps/<id>/index.js` + `styles.css`, and `server/apps/<id>.js` if it
+has data. Routes are all under `/api/<id>/…`. Tables are prefixed with the app id unless noted.
+Timestamps ISO strings. Lists newest-first unless noted. Every list endpoint is fast (< 200 ms
+without media work). All inputs validated (400), missing rows 404.
+
+### notes
+- Table `notes(id, title TEXT, body TEXT, pinned INTEGER 0/1, created_at, updated_at)` (migration `notes-1`; it runs after core-2, so the name is free).
+- `GET /api/notes?q=` (q searches title+body, LIKE), `POST /api/notes {title?, body?}` → 201,
+  `GET /api/notes/:id`, `PATCH /api/notes/:id {title?, body?, pinned?}`, `DELETE /api/notes/:id` → 204.
+- UI: list (pinned first, then updated desc) with title (or "Untitled"), first line preview,
+  relative time; search field; `+` creates and opens the editor; editor = title input + body
+  textarea (auto-growing), autosave debounced 600 ms with a tiny "Saved · 2s ago" line, pin and
+  delete in the nav bar right slot (delete via confirmSheet). Sub-route `#/notes/<id>`.
+  holdReload while the editor has focus.
+
+### tasks
+- Table `tasks` = the renamed v1 table (id, text, done, created_at, updated_at). Migration id
+  `tasks-1` may be a no-op or add an index.
+- `GET /api/tasks`, `POST /api/tasks {text}`, `PATCH /api/tasks/:id {text?, done?}`,
+  `DELETE /api/tasks/:id`, `GET /api/tasks/badge` → `{ count: <open> }`.
+- UI = the v1 Notes tab moved here unchanged in behaviour (input + Add, Open / Done sections,
+  two-tap delete), title "Tasks".
+
+### calendar
+- Table `calendar_events(id, title, date TEXT 'YYYY-MM-DD', start_time TEXT 'HH:MM' | NULL, end_time TEXT | NULL, all_day INTEGER, notes TEXT, created_at, updated_at)`.
+- `GET /api/calendar/events?from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive, max 62 days),
+  `POST`, `PATCH /:id`, `DELETE /:id`.
+- UI: month header with ‹ › and a "Today" button; 7-column grid (Sunday first) with the
+  selected day highlighted, today ringed, a small dot under days with events; below the grid a
+  list of the selected day's events (all-day first, then by start time) with time + title; tap
+  → edit sheet; `+` → add sheet (title, date default selected day, all-day toggle, start/end
+  `<input type=time>`, notes). Sub-route `#/calendar/YYYY-MM` keeps the month on reload.
+  Swipe left/right on the grid changes month (touch events, 50px threshold).
+
+### jakestagram
+- Table `gram_posts(id, kind 'image'|'video', file TEXT, thumb TEXT|NULL, width, height, caption TEXT, liked INTEGER, created_at)`.
+- `PUT /api/jakestagram/upload` raw body (≤ 300 MB; Content-Type image/* or video/*,
+  header `X-Filename`), saves to `DATA/media/jakestagram/<id>.<ext>`; makes a thumb via ffmpeg
+  (image → 720px-wide JPEG `<id>_t.jpg`; video → poster frame at 1 s) when ffmpeg exists,
+  else `thumb = null` (client falls back to the original); reads dimensions with ffprobe when
+  available. → `201 { upload: { file, thumb, kind, width, height } }`.
+- `POST /api/jakestagram/posts { file, thumb, kind, width, height, caption }` → 201,
+  `GET /api/jakestagram/posts?before=<id>&limit=20`, `PATCH /:id { caption?, liked? }`,
+  `DELETE /:id` → 204 and removes the files.
+- UI: two segments in the nav bar: **Feed** and **Profile**. Feed: cards = media (image via
+  `/media/jakestagram/<thumb or file>`, video via `<video playsinline controls poster>`),
+  heart toggle (filled red when liked) + relative time, caption below; infinite scroll by
+  `before`. Profile: 3-column square grid of thumbs; tap → feed scrolled to that post
+  (`#/jakestagram/p/<id>`). `+` in the nav bar → compose: `<input type=file accept="image/*,video/*">`
+  (iOS shows the library/camera picker), preview, caption field, Post button with a progress
+  bar (kit.upload onProgress); holdReload during upload. Delete via confirmSheet in a post's
+  `…` menu (a small sheet with Delete / Copy caption? keep: Delete only).
+
+### jaketube
+- Table `tube_videos(id TEXT PRIMARY KEY /* sha1(realpath) first 16 */, channel, path /* realpath */, name, size, mtime, duration REAL|NULL, width, height, thumb TEXT|NULL, probed_at)`,
+  `tube_progress(video_id PRIMARY KEY, seconds REAL, duration REAL, updated_at)`.
+- Scan: `GET /api/jaketube/videos?channel=&q=` lists videos (newest mtime first) from a scan of
+  `cfg.videoChannels` (extensions mp4 mov m4v mkv webm; cache the directory scan 60 s; upsert
+  rows; rows whose file vanished are dropped). Probing (duration/dims via ffprobe) and thumbs
+  (ffmpeg frame at min(10 % of duration, 30 s), 480px wide JPEG into `DATA/cache/jaketube/<id>.jpg`)
+  happen lazily in the background queue after a list call; the list returns `thumb: null`
+  until ready, and the client re-fetches the list once after 4 s if any thumb was null.
+  `GET /api/jaketube/videos/:id`, `GET /api/jaketube/stream/:id` → the file with Range support
+  (this is what `<video src>` uses), `GET /api/jaketube/channels` → `[{id,name,count}]`,
+  `GET/PUT /api/jaketube/progress/:id` ({seconds, duration}).
+- UI: home = channel chips (All + each channel) + search + a list of cards (16:9 thumb with a
+  duration pill, title = the file name made readable: `2026-10-15.mp4` → "Oct 15, 2026",
+  `2026-10-15_19-07-48.mp4` → "Oct 15, 2026 · 7:07 PM", other names → stem; subtitle = channel ·
+  size; a thin red progress bar on the thumb when partly watched). Watch page
+  (`#/jaketube/watch/<id>`): `<video controls playsinline autoplay>` 16:9 at the top, title,
+  meta, "Resume from 12:34" if progress exists (seek on loadedmetadata), save progress every
+  5 s and on pause/unmount, then an "Up next" list (same channel). holdReload while playing.
+  Note in the About/Settings of JakeTube (one line): 4K files stream as-is, so over Tailscale
+  they may buffer; LAN is fine.
+
+### jakegpt
+- Tables `gpt_conversations(id, title, model, created_at, updated_at)`, `gpt_messages(id, conversation_id, role 'user'|'assistant'|'system', content, created_at)`.
+- `GET /api/jakegpt/models` → `{ models: [{name, size}] , default }` from Ollama `/api/tags`
+  (503 `{error:"Ollama is not running"}` when unreachable). `GET /api/jakegpt/conversations`,
+  `POST` {model?} → 201, `GET /:id` (with messages), `DELETE /:id`, `PATCH /:id {title}`.
+  `POST /api/jakegpt/conversations/:id/messages { content }` → saves the user message, calls
+  Ollama `POST /api/chat` with `stream: true` (system prompt from cfg.gpt.system + full history),
+  and streams back `application/x-ndjson`, one JSON object per line: `{ "delta": "text" }` …
+  `{ "done": true, "message_id": n }`; saves the assistant message when done (or what was
+  received if the client aborts — handle `req` 'close'). Auto-title the conversation from the
+  first user message (first 40 chars) if untitled. Timeouts: 120 s idle.
+- UI: conversation list (title, model, relative time; swipe-free: `…` → Delete via sheet);
+  `+` new chat; chat view: bubbles (user right/tinted, assistant left/plain, assistant content
+  through `kit.renderMarkdownLite`), a streaming cursor, composer pinned to the bottom above the
+  keyboard (textarea auto-grow, Send button, Stop while streaming → aborts the fetch), model
+  picker in the nav bar right slot (a sheet listing models; default from `/api/settings`
+  `gpt.model` else cfg default). First token can take ~10 s while the model loads: show
+  "Loading model…" after 2 s with no delta. holdReload while streaming.
+
+### habits
+- Tables `habits(id, name, color TEXT, created_at, archived INTEGER)`, `habit_checks(habit_id, date 'YYYY-MM-DD', PRIMARY KEY(habit_id, date))`.
+- `GET /api/habits?days=7` → habits with `checks: ['2026-11-01', …]` for the window and
+  `streak` (consecutive days ending today or yesterday), `POST {name, color}`, `PATCH /:id`,
+  `DELETE /:id`, `PUT /api/habits/:id/checks/:date` (toggle on) / `DELETE …/:date` (off).
+- UI: one row per habit: colour dot, name, streak ("12 days"), and a 7-day strip of small
+  circles (today rightmost, tap today to toggle; past days read-only... allow toggling
+  yesterday too). `+` → sheet with name + 6 colour swatches. Archive/delete via `…` sheet.
+
+### files
+- No tables. `GET /api/files/list?root=<name>&path=<relative>` → `{ root, path, entries: [{name, kind 'dir'|'file', size, mtime, ext}] }` (dirs first, alphabetical, dotfiles hidden),
+  `GET /api/files/roots` → `[{name, exists}]`, `GET /api/files/get?root=&path=` → the file with
+  Range support (inline), `GET /api/files/text?root=&path=` → first 200 KB as `{ text, truncated }`
+  for text-ish extensions. Containment: resolve `realpath(root)` and `realpath(root/path)`;
+  the latter must start with the former + sep; 400 otherwise; 404 if missing.
+- UI: roots list → folder view with a breadcrumb in the nav bar title and `‹ Back` going up
+  one level (`#/files/<root>/<path>`); rows with a folder/file glyph, name, size or item count;
+  previews: image (full width), video (`<video controls playsinline>`), text/md/json/log/csv
+  (monospace, scrollable), otherwise name + size + "No preview".
+
+### weather
+- Settings keys: `weather.city` (string), `weather.lat`, `weather.lon`, `weather.units`.
+- `GET /api/weather/search?q=` → Open-Meteo geocoding top 5 `[{name, admin1, country, lat, lon}]`;
+  `GET /api/weather?lat=&lon=&units=` → proxied Open-Meteo forecast trimmed to
+  `{ current: {temp, feels, code, wind, humidity, time}, hourly: [{time, temp, code, precip}] (next 24 h), daily: [{date, min, max, code, precip}] (7 d) }`,
+  cached 10 min per lat/lon. Weather codes → short labels + a small set of inline SVG glyphs
+  (sun, cloud, rain, snow, storm, fog) drawn by the app — simple strokes, no emoji.
+- UI: if no city set → a search field with results to pick; else: city + current temp (large),
+  condition, feels like, wind; an hourly strip (horizontal scroll); a 7-day list with min/max
+  bars. Nav right: "Change" (search again). Units toggle °F/°C writes `weather.units`.
+
+### server / settings
+- `server` = the v1 Home view moved into `web/apps/server/` (no server changes).
+- `settings` = the v1 About view moved into `web/apps/settings/` + rows for: Weather city
+  (read-only, "set it in Weather"), JakeGPT default model (picker from `/api/jakegpt/models`
+  → writes settings `gpt.model`), units. Keep "Reload" and the "How to update" blurb.
+
+## Testing conventions (all builders)
+
+- Local server for tests: `JAKESDATA_PORT=<your port> JAKESDATA_DATA=<scratch>/data JAKESDATA_WEB=<repo>/web JAKESDATA_CONFIG=<scratch>/config.json node server/index.js`
+  — copy `server/config.json` to the scratch dir and point `fileRoots`/`videoChannels` at
+  scratch folders you populate (for JakeTube make two short test MP4s with ffmpeg:
+  `ffmpeg -f lavfi -i testsrc=size=640x360:rate=30 -t 8 -pix_fmt yuv420p out.mp4`).
+  ffmpeg on the Mac: use `which ffmpeg` (Homebrew); if absent, say so and skip thumb tests.
+- Browser checks: Playwright is at `/Users/jacobbeauchamp/.pyenv/versions/devika_python_virtual_env/bin/python`
+  (`channel="chrome"`, viewport 390×844, deviceScaleFactor 2, both colour schemes, `is_mobile=True`).
+  Open `http://localhost:<port>/#/<app>` and LOOK at the screenshots with the Read tool.
+- Ollama on the Mac: `/opt/homebrew/bin/ollama` (`ollama serve` if not running; `ollama list`;
+  pull `llama3.2:3b` if there is no model). Point tests at it with `JAKESDATA_OLLAMA`.
+- Never `git commit`/`push`, never ssh to the PC, never edit files outside the directories you own.
 
 ## Deploy (deploy/) — already written by Jake's assistant, read before changing
 
