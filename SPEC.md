@@ -425,6 +425,26 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
   (SET · PREVIOUS · weight/reps/time/distance · check), set types (warm-up, drop, failure), a rest
   timer bar, Finish → saved workout with new records. Workouts can be edited, repeated, saved as routines.
 
+### food  (added 2026-11-02 — "my calorie tracker, instead of Notion")
+- Tile: id `food`, label "Food", colour #ca8a04, glyph = fork and knife.
+- Table `food_entries(id, date 'YYYY-MM-DD', meal 'breakfast'|'lunch'|'dinner'|'snack', name, calories,
+  protein, carbs, fat (grams, nullable), notes, ext_id UNIQUE (import source id), created_at, updated_at)`
+  (migration `food-1`). Goals are settings `food.goal.calories|protein|carbs|fat`.
+- Routes are listed in the header of `server/apps/food.js`. "Today" is the PC's local date.
+- UI: Day (‹ date ›, calories against goal + P/C/F bars, entries grouped by meal, tap to edit,
+  `+` to add, "Usuals" chips) and History (30-day bar chart, averages, per-day list).
+  Sub-routes `#/food/YYYY-MM-DD`, `#/food/history`. Refreshes every 30 s (Claude logs from elsewhere).
+
+### connector  (added 2026-11-02 — "Claude should update my app like it updates Notion")
+- `server/apps/connector.js`: a remote MCP server (Streamable HTTP, stateless, JSON responses) on a
+  second listener, 127.0.0.1:4801, answering only `POST /mcp/<secret>` (secret in
+  `DATA/connector/secret`, rotate from Settings). Tools call the app's own API over loopback;
+  add a tool by adding an entry to `TOOLS`. Current tools: food_log/day/history/search/update/
+  delete/goals, tasks_list/add/set_done, grocery_list/add, notes_search/create.
+- `deploy/connector/`: the tunnel (ngrok or Cloudflare) as `jakes-brain-tunnel.service`, and
+  `setup-connector.sh` (run from the Mac). Only :4801 is tunnelled; :4800 stays LAN/tailnet-only.
+- Settings → Claude connector shows the status, public address, URL (Copy) and "Make a new URL".
+
 ## Desktop version (added 2026-11-02)
 
 Jake also uses the app on the Linux PC itself, opened to the Graph. The desktop version is the

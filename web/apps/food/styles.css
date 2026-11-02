@@ -1,0 +1,172 @@
+/* Food app: calorie + macro log. */
+.app-food {
+  --food-p: #ff375f;
+  --food-c: #ff9f0a;
+  --food-f: #5e5ce6;
+}
+
+.app-food .food-top { display: flex; justify-content: center; margin-bottom: 12px; }
+
+.app-food .food-datebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.app-food .food-arrow {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.app-food .food-arrow:disabled { color: var(--grey); cursor: default; }
+
+.app-food .food-date {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 17px;
+}
+
+.app-food .food-today {
+  color: var(--accent);
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+.app-food .food-summary { padding: 14px; }
+.app-food .food-loading { min-height: 150px; }
+
+.app-food .food-cal {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  padding: 0;
+}
+
+.app-food .food-cal-num { font-variant-numeric: tabular-nums; }
+.app-food .food-cal-num .big { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+.app-food .food-cal-num .unit { font-size: 17px; color: var(--muted); }
+.app-food .food-cal-sub { font-size: 15px; color: var(--muted); margin: 2px 0 10px; }
+
+.app-food .food-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.app-food .food-bar-fill { height: 100%; border-radius: 3px; }
+
+.app-food .food-macros {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.app-food .food-macro-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-food .swatch { width: 8px; height: 8px; border-radius: 50%; }
+
+.app-food .food-macro-num {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 3px 0 6px;
+  white-space: nowrap;
+}
+
+.app-food .food-meal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.app-food .food-meal-cal {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+
+.app-food .food-item { border-bottom: 1px solid var(--hair); }
+.app-food .food-item:last-child { border-bottom: 0; }
+
+.app-food .food-row {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  text-align: left;
+  color: inherit;
+}
+
+.app-food .food-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-food .food-name { overflow-wrap: anywhere; }
+.app-food .food-sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.app-food .food-kcal {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.app-food .food-usuals { margin-bottom: 16px; }
+
+.app-food .food-chart-card { padding: 14px; margin-bottom: 16px; }
+
+.app-food .food-chart {
+  position: relative;
+  height: 140px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.app-food .food-chart-goal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--grey);
+  pointer-events: none;
+}
+
+.app-food .food-col {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  min-width: 0;
+}
+
+.app-food .food-col-fill { display: block; width: 100%; border-radius: 2px 2px 0 0; }
+
+.app-food .food-stats { margin-bottom: 4px; }
+
+@media (hover: hover) {
+  .app-food .food-row:hover .food-name,
+  .app-food .food-col:hover .food-col-fill { opacity: 0.75; }
+}

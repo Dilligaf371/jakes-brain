@@ -5,6 +5,7 @@
 // GET /api/apps says which server modules and web apps exist, so nothing here probes a route
 // that would 404 (a console error) and the Weather row only links out when Weather is built.
 import * as kit from '../../kit.js';
+import { connectorSection } from './connector.js';
 
 const { api, el, fmt, toast, haptic, navbar, section, actionSheet, icon, shellVersion, nav } = kit;
 
@@ -55,6 +56,7 @@ export default {
         section('Apps'),
         appsCard,
         cityHint,
+        connectorSection(),
         section('How to update'),
         el('p', { class: 'blurb', html: 'Edit <code>web/</code> or <code>server/</code> in <code>~/jakes-data-app</code> on the PC (or run <code>deploy/deploy.sh</code> from the Mac). The app refreshes itself within 30 seconds.' }),
       ),

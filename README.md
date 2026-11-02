@@ -21,6 +21,7 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 | Tasks | checklist (open / done), badge on the tile |
 | Groceries | shopping list grouped by aisle, check items into the cart, "Buy again" chips, badge on the tile |
 | Workout | Hevy-style gym log: routines, live workout with previous sets + rest timer, history, per-exercise charts and personal records |
+| Food | calorie + macro log: today against goals, entries by meal, 30-day history, one-tap usuals. Claude logs to it through the connector |
 | Calendar | month grid, day agenda, events |
 | Jakestagram | private Instagram: post photos and videos from the phone, feed + grid, hearts |
 | JakeTube | private YouTube over the PC's videos (daily auto-vlogs, raw Pocket 3, game captures) |
@@ -40,6 +41,13 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 | Graph | Obsidian-style graph of everything above, linked by day, tag, note links and @mentions |
 | Server | the PC at a glance: uptime, load, memory, disk, one row per service |
 | Settings | address in use, deployed build, Reload, per-app settings |
+
+## Claude connector
+
+Claude (the app, claude.ai, Claude Code) can use Jake's Brain like it uses Notion: log food, check
+today's totals, add tasks, groceries and notes. It is a custom connector served by the PC through a
+tunnel; only the connector is public, behind a secret URL. Setup: `deploy/connector/README.md`.
+The URL is in Settings → Claude connector.
 
 ## Making changes
 

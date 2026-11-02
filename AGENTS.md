@@ -24,7 +24,9 @@ shown on his iPhone (native shell) and on the PC (browser app window). Read `REA
   `window.confirm/alert/prompt` (the shell swallows them) — use `kit.confirmSheet`. Hold the
   auto-reload (`kit.holdReload`) while the user is typing, uploading, playing, or streaming.
 - **No secrets in the repo.** The server is unauthenticated and reachable only on the home LAN
-  and the tailnet; do not expose it publicly without adding auth.
+  and the tailnet; do not expose it publicly without adding auth. The one public piece is the
+  Claude connector (`server/apps/connector.js`, `deploy/connector/`): a separate 127.0.0.1:4801
+  listener behind a secret URL. Never tunnel :4800. Give Claude new abilities by adding tools there.
 - **Verify before claiming done:** `node --check` your files, start a local server
   (`JAKESDATA_PORT=4811 JAKESDATA_DATA=/tmp/jd-data JAKESDATA_CONFIG=<scratch copy of server/config.json> node server/index.js`),
   curl the routes, and look at the UI at 390×844 (Playwright at

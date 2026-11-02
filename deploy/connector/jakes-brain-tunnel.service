@@ -1,0 +1,13 @@
+[Unit]
+Description=Jake's Brain: public address for the Claude connector (127.0.0.1:4801 only)
+After=network-online.target jakes-data.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/jakes-brain/tunnel.env
+ExecStart=%h/jakes-data-app/deploy/connector/tunnel.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
