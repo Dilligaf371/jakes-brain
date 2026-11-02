@@ -31,16 +31,19 @@ async function loadDay(root, date) {
   return { date, blocks: out, words: out.reduce((sum, b) => sum + b.text.split(/\s+/).length, 0) };
 }
 
+// Every logged day, newest first. Also read by the Graph.
+export async function readLogs(root) {
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
+  const dates = entries.filter((e) => e.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(e.name)).map((e) => e.name).sort().reverse();
+  return (await Promise.all(dates.map((date) => loadDay(root, date)))).filter((day) => day.blocks.length);
+}
+
 export default {
   id: 'daylog',
   migrations: [],
   register(r, { cfg, expandHome }) {
     const root = expandHome(cfg.daylog?.root || '~/Videos/pocket3-vlog/vlogs');
-    const index = cached(300_000, async () => {
-      const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
-      const dates = entries.filter((e) => e.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(e.name)).map((e) => e.name).sort().reverse();
-      return (await Promise.all(dates.map((date) => loadDay(root, date)))).filter((day) => day.blocks.length);
-    });
+    const index = cached(300_000, () => readLogs(root));
     const videoId = (date) => {
       try {
         const real = fs.realpathSync(path.join(root, `${date}.mp4`));

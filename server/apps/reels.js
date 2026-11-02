@@ -19,7 +19,7 @@ export default {
 
     const proposals = cached(60_000, async () => {
       const { items = [] } = await get('/api/proposed-reels');
-      return items.slice(0, 40).map(({ id, batch_date, source, title, hook, script, on_screen, caption, status }) =>
+      return items.slice(0, 200).map(({ id, batch_date, source, title, hook, script, on_screen, caption, status }) =>
         ({ id, batch_date, source, title, hook, script, on_screen, caption, status }));
     });
     const hooks = cached(60_000, async () => {

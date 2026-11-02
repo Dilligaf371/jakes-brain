@@ -13,6 +13,8 @@
 //
 // Caps: at most 2000 nodes. Over that, the oldest day clusters (the day hub + the items whose
 // day it is) are dropped first and `truncated` is true.
+import { cached } from './_lib.js';
+import { readLogs } from './daylog.js';
 import { HttpError } from '../http.js';
 
 const CACHE_MS = 30_000;
@@ -20,6 +22,12 @@ const NODE_CAP = 2000;
 const HABIT_WINDOW_DAYS = 60;
 const LABEL_MAX = 80;
 const TAG_MAX = 40;
+const SESSION_GAP_MS = 25 * 60_000;   // clips closer than this are one recording session
+const EXTERNAL_MS = 5 * 60_000;
+const ITEM_TOPICS = 5;                // keep an item's rarest topics, so links stay meaningful
+const DAY_TOPICS = 12;
+// Too generic to connect anything; every reel would land on the same hub.
+const TOPIC_STOP = new Set(['ai', 'ad', 'ads', 'tech', 'eli5', 'creative', 'creator', 'content', 'video', 'reel', 'new', 'app', 'apps', 'tool', 'code', 'coding', 'build', 'building']);
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 // "#focus", "#deep-work", "#3d": a # that does not follow a word char, '#', '&' or '/'
 // (so URL fragments and "&#39;" are not tags), then letters/digits/_/-; needs a letter.
@@ -45,13 +53,34 @@ export default {
   register(r, ctx) {
     let cache = null; // { at, data }
 
-    r.get('/api/graph', (req, res, { query }) => {
+    const root = ctx.expandHome(ctx.cfg.daylog?.root || '~/Videos/pocket3-vlog/vlogs');
+    const base = String(ctx.cfg.tracker?.url || 'http://127.0.0.1:3000').replace(/\/$/, '');
+    const username = ctx.cfg.tracker?.username || 'jakebeau_';
+    let lastExternal = { reels: [], ideas: [], hooks: [], logs: [] };
+    const external = cached(EXTERNAL_MS, async () => {
+      const get = (path) => ctx.tools.fetchJson(`${base}${path}`, { timeout: 6000 });
+      const logs = await readLogs(root).catch(() => []);
+      try {
+        const creators = await get('/api/creators');
+        const me = (Array.isArray(creators) ? creators : creators.creators || []).find((c) => c.username === username);
+        const [reels, ideas, makers] = await Promise.all([
+          me ? get(`/api/reels?creator=${me.id}`) : [], get('/api/proposed-reels'), get('/api/hook-makers?limit=60'),
+        ]);
+        lastExternal = { reels: Array.isArray(reels) ? reels : [], ideas: ideas.items || [], hooks: (makers.items || []).flatMap((m) => m.proposals || []), logs };
+      } catch (err) {
+        ctx.log.warn(`graph: reels tracker unavailable: ${err?.message || err}`);
+        lastExternal = { ...lastExternal, logs };
+      }
+      return lastExternal;
+    });
+
+    r.get('/api/graph', async (req, res, { query }) => {
       const refresh = query.refresh === '1' || query.refresh === 'true';
       if (query.refresh !== undefined && !refresh && query.refresh !== '0' && query.refresh !== 'false' && query.refresh !== '') {
         throw new HttpError(400, 'refresh must be 1 or 0');
       }
       if (!refresh && cache && Date.now() - cache.at < CACHE_MS) return cache.data;
-      const data = buildGraph(ctx);
+      const data = buildGraph({ ...ctx, external: await external() });
       cache = { at: Date.now(), data };
       return data;
     });
@@ -60,7 +89,7 @@ export default {
 
 // ---------------------------------------------------------------- build
 
-export function buildGraph({ db, log }) {
+export function buildGraph({ db, log, external = {} }) {
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => String(row.name)));
   const nodes = new Map();           // id -> node
   const edges = [];
@@ -162,13 +191,27 @@ export function buildGraph({ db, log }) {
     }
   });
 
+  // Recordings are cut into 1 to 20 minute clips, so consecutive clips become one session node.
   from('tube_videos', () => {
-    for (const row of db.prepare('SELECT id, channel, name, mtime, duration FROM tube_videos ORDER BY mtime DESC').all()) {
-      const id = `video:${row.id}`;
-      const when = toDate(row.mtime) || dateFromName(row.name);
-      const day = when ? localDay(when) : null;
-      addNode({ id, type: 'video', label: trimLabel(readableVideoName(row.name)), app: 'jaketube', route: `#/jaketube/watch/${row.id}`, date: day,
-        meta: { channel: row.channel || null, duration: Number.isFinite(Number(row.duration)) && row.duration != null ? Number(row.duration) : null } });
+    const clips = db.prepare('SELECT id, channel, name, mtime, duration FROM tube_videos').all()
+      .map((row) => ({ ...row, start: clipStart(row) }))
+      .sort((x, y) => String(x.channel).localeCompare(String(y.channel)) || x.start - y.start);
+    const sessions = [];
+    for (const clip of clips) {
+      const last = sessions.at(-1);
+      const tail = last?.at(-1);
+      const joins = tail && clip.channel !== 'vlogs' && tail.channel === clip.channel && clip.start - tail.start <= SESSION_GAP_MS;
+      if (joins) last.push(clip);
+      else sessions.push([clip]);
+    }
+    for (const group of sessions) {
+      const first = group[0];
+      const id = `video:${first.id}`;
+      const day = Number.isFinite(first.start) ? localDay(new Date(first.start)) : null;
+      const duration = group.reduce((sum, clip) => sum + (Number(clip.duration) || 0), 0);
+      const label = group.length > 1 ? `${dayLabel(day, today)}, ${group.length} clips` : readableVideoName(first.name);
+      addNode({ id, type: 'video', label: trimLabel(label), app: 'jaketube', route: `#/jaketube/watch/${first.id}`, date: day,
+        meta: { channel: first.channel || null, duration: duration || null, clips: group.length } });
       linkDay(id, day);
     }
   });
@@ -242,6 +285,85 @@ export function buildGraph({ db, log }) {
       tagged.push([id, String(row.label || '')]);
     }
   });
+  // Reels, reel ideas, hooks and day logs join the graph through the topics they share.
+  const topicTexts = tagged.map(([nodeId, text]) => [nodeId, String(text)]);
+  const vocab = new Map();           // slug -> { label, uses }
+  const countTopic = (raw) => {
+    const word = topicWord(raw);
+    if (!word) return;
+    const slug = topicSlug(word);
+    const entry = vocab.get(slug) || { label: word, uses: 0 };
+    entry.uses += 1;
+    vocab.set(slug, entry);
+  };
+  const handles = new Map();         // @handle -> reel node ids
+  const reelIds = new Set();
+  for (const reel of external.reels || []) {
+    const id = `reel:${reel.id}`;
+    const caption = String(reel.caption || '');
+    const title = firstLine(caption.replace(/[#@][\p{L}\p{N}_.]+/gu, ' ')) || 'Reel';
+    addNode({ id, type: 'reel', label: trimLabel(title), app: 'reels', route: null, date: reel.posted_at ? localDay(reel.posted_at) : null,
+      meta: { url: /^https:\/\//.test(reel.url || '') ? reel.url : null, views: reel.latest_views || 0, sponsored: Boolean(reel.is_sponsored) } });
+    reelIds.add(reel.id);
+    topicTexts.push([id, caption]);
+    for (const tag of new Set(caption.match(/#[\p{L}\p{N}_]+/gu) || [])) countTopic(tag);
+    for (const handle of new Set(caption.match(/(?<![\p{L}\p{N}_.])@[\p{L}\p{N}_.]+/gu) || [])) {
+      const key = handle.toLowerCase().replace(/\.+$/, '');
+      handles.set(key, [...(handles.get(key) || []), id]);
+    }
+  }
+  for (const idea of external.ideas || []) {
+    const id = `idea:${idea.id}`;
+    addNode({ id, type: 'idea', label: trimLabel(clean(idea.title) || 'Reel idea'), app: 'reels', route: `#/reels/idea/${idea.id}`, date: idea.batch_date || null, meta: { source: idea.source || null } });
+    topicTexts.push([id, `${idea.title}\n${idea.hook}\n${idea.script}\n${idea.caption}`]);
+    for (const word of parseList(idea.trend_keywords)) countTopic(word);
+    for (const reelId of parseList(idea.grounding_reel_ids)) if (reelIds.has(reelId)) addEdge(id, `reel:${reelId}`, 'link');
+  }
+  for (const hook of external.hooks || []) {
+    const id = `hook:${hook.id}`;
+    addNode({ id, type: 'hook', label: trimLabel(clean(hook.hook) || 'Hook'), app: 'reels', route: '#/reels', date: hook.batch_date || null, meta: { maker: hook.maker_name || null } });
+    topicTexts.push([id, `${hook.hook}\n${hook.reason}`]);
+  }
+  for (const day of external.logs || []) {
+    const id = ensureDay(day.date);
+    const node = nodes.get(id);
+    node.route = `#/daylog/${day.date}`;
+    node.app = 'daylog';
+    topicTexts.push([id, day.blocks.map((block) => block.text).join(' ')]);
+  }
+  for (const [handle, reels] of handles) {
+    if (reels.length < 2) continue;
+    const id = `tag:${handle}`;
+    addNode({ id, type: 'tag', label: handle, app: null, route: null, date: null, meta: {} });
+    for (const reel of reels) addEdge(reel, id, 'tag');
+  }
+  const topics = [...vocab].filter(([, entry]) => entry.uses >= 2);
+  if (topics.length) {
+    const alternatives = topics.map(([, entry]) => entry.label).sort((x, y) => y.length - x.length)
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s-]+/g, '[\\s-]+'));
+    const finder = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives.join('|')})s?(?![\\p{L}\\p{N}])`, 'giu');
+    const found = [];
+    const reach = new Map();
+    for (const [nodeId, text] of topicTexts) {
+      const slugs = new Set();
+      for (const hit of text.matchAll(finder)) {
+        const slug = topicSlug(hit[0].toLowerCase().replace(/[\s-]+/g, ' ').replace(/(?<=.{4})s$/, ''));
+        if (vocab.has(slug)) slugs.add(slug);
+      }
+      found.push([nodeId, slugs]);
+      for (const slug of slugs) reach.set(slug, (reach.get(slug) || 0) + 1);
+    }
+    const ceiling = Math.max(30, Math.round(found.length * 0.12));
+    for (const [nodeId, slugs] of found) {
+      const useful = [...slugs].filter((slug) => reach.get(slug) >= 2 && reach.get(slug) <= ceiling).sort((x, y) => reach.get(x) - reach.get(y));
+      for (const slug of useful.slice(0, nodeId.startsWith('day:') ? DAY_TOPICS : ITEM_TOPICS)) {
+        const id = `tag:${slug}`;
+        if (!nodes.has(id)) addNode({ id, type: 'tag', label: vocab.get(slug).label, app: null, route: null, date: null, meta: {} });
+        addEdge(nodeId, id, 'tag');
+      }
+    }
+  }
+
   for (const [nodeId, text] of tagged) {
     for (const match of String(text).matchAll(/(^|[^\p{L}\p{N}_@./])@([\p{L}\p{N}_.-]{1,40})/gu)) {
       const person = peopleByHandle.get(match[2].toLowerCase().replace(/[.-]+$/, ''));
@@ -390,6 +512,33 @@ export function readableVideoName(name) {
   const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   if (m[4] === undefined) return date;
   return `${date} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+}
+
+// Recording start from a name like 2026-10-15_19-07-48 or 2025-03-25 05-44-04, else file time.
+function clipStart(row) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ _](\d{2})-(\d{2})-(\d{2})/.exec(String(row.name));
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  return new Date(toDate(row.mtime) || dateFromName(row.name) || NaN).getTime();
+}
+
+function topicWord(raw) {
+  let word = String(raw || '').toLowerCase().replace(/^#/, '').replace(/\s+/g, ' ').trim();
+  if (word.length > 4 && word.endsWith('s') && !word.endsWith('ss')) word = word.slice(0, -1);
+  if (word.length < 3 || word.length > 40 || TOPIC_STOP.has(word) || /partner|sponsor/.test(word)) return '';
+  return word;
+}
+
+const topicSlug = (word) => word.replace(/\s+/g, '-');
+
+// The tracker stores some lists as JSON text.
+function parseList(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function dateFromName(name) {

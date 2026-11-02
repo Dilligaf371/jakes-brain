@@ -27,10 +27,13 @@ const TYPES = [
   { type: 'person', label: 'People', app: 'people' },
   { type: 'link', label: 'Saved', app: 'saved' },
   { type: 'focus', label: 'Focus', app: 'focus' },
+  { type: 'reel', label: 'Reels', app: 'reels' },
+  { type: 'idea', label: 'Reel ideas', app: 'reels' },
+  { type: 'hook', label: 'Hooks', app: 'reels' },
   { type: 'day', label: 'Days', app: null, color: '#8e8e93' },
   { type: 'tag', label: 'Tags', app: null, color: '#64d2ff' },
 ];
-const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', deal: 'Deal', person: 'Person', link: 'Saved link', focus: 'Focus', day: 'Day', tag: 'Tag' };
+const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', deal: 'Deal', person: 'Person', link: 'Saved link', focus: 'Focus', reel: 'Reel', idea: 'Reel idea', hook: 'Hook', day: 'Day', tag: 'Tag' };
 // Used only when /apps.json cannot be read (the tile colours from SPEC.md).
 const FALLBACK = { notes: '#ffcc00', tasks: '#5e5ce6', calendar: '#ffffff', jakestagram: '#e1306c', jaketube: '#e62117', jakegpt: '#10a37f', habits: '#ff9f0a', graph: '#bf5af2' };
 const FALLBACK_LABELS = { notes: 'Notes', tasks: 'Tasks', calendar: 'Calendar', jakestagram: 'Jakestagram', jaketube: 'JakeTube', jakegpt: 'JakeGPT', habits: 'Habits' };
@@ -39,12 +42,15 @@ const FALLBACK_LABELS = { notes: 'Notes', tasks: 'Tasks', calendar: 'Calendar', 
 const ALPHA_MIN = 0.001;
 const ALPHA_DECAY = 1 - Math.pow(ALPHA_MIN, 1 / 300); // ~300 ticks from 1 to ALPHA_MIN
 const VELOCITY_KEEP = 0.55;                            // velocity decay 0.45
-const REPEL = 58;                                      // many-body strength (times mass)
+const REPEL = 95;                                      // many-body strength (times mass)
 const REPEL_CELL = 110;                                // exact pairwise inside the 3x3 neighbourhood of this cell size
 const MAX_GRID = 40;                                   // cells per axis cap (the cell grows instead)
-const LINK_DIST = { day: 36, tag: 42, link: 46 };     // + a degree term, see linkDistance()
+const LINK_DIST = 54;                                  // one rest length, like Obsidian
 const LABEL_COLLIDE_MAX = 400;                         // beyond this many on-screen labels, skip the overlap pass
-const GRAVITY = 0.035;
+const GRAVITY = 0.02;
+const TUNE_KEY = 'graph.tune';
+const TUNE_DEFAULT = { textFade: 1, nodeSize: 1, linkWidth: 1, center: 1, repel: 1, link: 1, distance: 1, colors: false, orphans: true };
+const ACCENT_MIX = 0.22;                               // per-frame easing of the hover highlight
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
 const FIT_MAX_ZOOM = 1.25;
@@ -72,6 +78,10 @@ export default {
       visEdges: [],
       colorGroups: [],
       filters: loadFilters(),
+      tune: loadTune(),
+      fade: 0,
+      fadeNode: null,
+      fadeBusy: false,
       query: '',
       matches: 0,
       sel: null,
@@ -261,9 +271,80 @@ function buildSheet() {
   const panel = el('div', { class: 'gsheet-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Filter and search' },
     el('div', { class: 'gsheet-group gsearch' }, input, count),
     el('div', { class: 'gsheet-group' }, head, list),
+    tuneGroup('Display', [
+      toggle('colors', 'Colour by app'), toggle('orphans', 'Orphans'),
+      slider('textFade', 'Text fade', 0.4, 2, 0.05), slider('nodeSize', 'Node size', 0.5, 2, 0.05), slider('linkWidth', 'Link thickness', 0.4, 2.5, 0.05),
+    ]),
+    tuneGroup('Forces', [
+      slider('center', 'Centre force', 0, 3, 0.05), slider('repel', 'Repel force', 0.2, 3, 0.05),
+      slider('link', 'Link force', 0.2, 2, 0.05), slider('distance', 'Link distance', 0.4, 3, 0.05),
+    ]),
+    el('div', { class: 'gsheet-group' }, el('button', { class: 'gsheet-done gsheet-reset', type: 'button', text: 'Reset display and forces', 'on:click': resetTune })),
     el('div', { class: 'gsheet-group' }, done));
   const host = el('div', { class: 'gsheet', hidden: true }, backdrop, panel);
   return { host, sheetPanel: panel, sheetBackdrop: backdrop, searchInput: input, searchCount: count, typeRows: rows };
+}
+
+function tuneGroup(title, rows) {
+  return el('div', { class: 'gsheet-group' }, el('div', { class: 'gsheet-head' }, el('span', { class: 'gsheet-title', text: title })), rows);
+}
+
+function slider(key, label, min, max, step) {
+  const input = el('input', { class: 'grange', type: 'range', min, max, step, 'aria-label': label });
+  input.value = S.tune[key];
+  input.dataset.tune = key;
+  input.addEventListener('input', () => setTune(key, Number(input.value)));
+  return el('label', { class: 'grange-row' }, el('span', { text: label }), input);
+}
+
+function toggle(key, label) {
+  const sw = el('button', { class: 'gswitch', type: 'button', role: 'switch', 'aria-checked': String(Boolean(S.tune[key])), 'aria-label': label });
+  sw.dataset.tune = key;
+  sw.addEventListener('click', () => {
+    haptic('light');
+    setTune(key, !S.tune[key]);
+    sw.setAttribute('aria-checked', String(Boolean(S.tune[key])));
+  });
+  return el('div', { class: 'grow' }, el('span', { class: 'glabel', text: label }), sw);
+}
+
+function loadTune() {
+  const saved = kit.store.get(TUNE_KEY, null);
+  const out = { ...TUNE_DEFAULT };
+  if (saved && typeof saved === 'object') {
+    for (const key of Object.keys(out)) if (typeof saved[key] === typeof out[key]) out[key] = saved[key];
+  }
+  return out;
+}
+
+function setTune(key, value) {
+  S.tune[key] = value;
+  kit.store.set(TUNE_KEY, S.tune);
+  applyTune();
+}
+
+function resetTune() {
+  S.tune = { ...TUNE_DEFAULT };
+  kit.store.del(TUNE_KEY);
+  for (const input of S.root.querySelectorAll('[data-tune]')) {
+    if (input.type === 'range') input.value = S.tune[input.dataset.tune];
+    else input.setAttribute('aria-checked', String(Boolean(S.tune[input.dataset.tune])));
+  }
+  applyTune();
+}
+
+function sizeNodes() {
+  for (const n of S.nodes) {
+    n.r = Math.min(17, 2.6 + 1.25 * Math.sqrt(n.deg)) * S.tune.nodeSize;
+    n.m = 0.55 + n.r / 7;
+  }
+}
+
+function applyTune() {
+  sizeNodes();
+  for (const e of S.edges) e.dist = linkDistance(e);
+  recolor();
+  applyFilters(0.5);
 }
 
 function openSheet() {
@@ -413,7 +494,7 @@ function setData(data) {
     const key = `${a.id}\n${b.id}`;
     if (seen.has(key) || seen.has(`${b.id}\n${a.id}`)) continue;
     seen.add(key);
-    const kind = raw.kind === 'tag' || raw.kind === 'link' ? raw.kind : 'day';
+    const kind = raw.kind === 'tag' ? 'tag' : raw.kind === 'day' ? 'day' : 'link';
     edges.push({ a, b, kind, vis: true });
     a.deg += 1;
     b.deg += 1;
@@ -424,15 +505,11 @@ function setData(data) {
     e.b.adj.push(e.a.idx);
     e.dist = linkDistance(e);
   }
-  for (const n of nodes) {
-    n.r = 4 + Math.min(10, 1.7 * Math.sqrt(Math.max(0, n.deg - 1)));
-    n.m = 0.55 + n.r / 7;
-  }
   // Initial positions: a phyllotaxis spiral for the whole set the first time, and new nodes
   // next to an already-placed neighbour afterwards.
   const firstTime = prev.size === 0;
   const spiral = (i) => {
-    const radius = 9 * Math.sqrt(0.5 + i);
+    const radius = 5 * Math.sqrt(0.5 + i);
     const angle = i * 2.399963229728653;
     return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
   };
@@ -456,6 +533,7 @@ function setData(data) {
   S.data = data;
   S.nodes = nodes;
   S.edges = edges;
+  sizeNodes();
   S.byId = byId;
   S.loaded = true;
   if (S.sel) S.sel = byId.get(S.sel.id) || null;
@@ -479,7 +557,7 @@ function setData(data) {
 // matches and the stats line, then re-heats the simulation.
 function applyFilters(reheat = 0.3) {
   const f = S.filters;
-  for (const n of S.nodes) n.vis = f[n.type] !== false;
+  for (const n of S.nodes) n.vis = f[n.type] !== false && (S.tune.orphans || n.deg > 0);
   S.visNodes = S.nodes.filter((n) => n.vis);
   S.visEdges = S.edges.filter((e) => {
     e.vis = e.a.vis && e.b.vis;
@@ -545,6 +623,7 @@ function setFilters(next) {
 }
 
 function colorForType(type, app) {
+  if (!S.tune.colors) return type === 'tag' ? S.pal.tag : S.pal.node;
   const t = TYPES.find((x) => x.type === type);
   if (t && t.color) return t.color;
   const colors = S.colors || FALLBACK;
@@ -575,10 +654,11 @@ function onSchemeChange() {
   if (S.sel) renderCard(S.sel);
 }
 
+// Obsidian's default graph colours: grey notes, green tags, purple on hover.
 function palette(dark) {
   return dark
-    ? { bg: '#161616', edge: 'rgba(255,255,255,0.11)', edgeHi: 'rgba(255,255,255,0.55)', edgeDim: 'rgba(255,255,255,0.03)', label: 'rgba(242,242,247,0.8)', labelHi: '#ffffff', halo: '#161616', ring: '#ffffff', match: '#ffd60a', nodeDim: 0.16 }
-    : { bg: '#f2f2f7', edge: 'rgba(0,0,0,0.14)', edgeHi: 'rgba(0,0,0,0.6)', edgeDim: 'rgba(0,0,0,0.035)', label: 'rgba(28,28,30,0.82)', labelHi: '#1c1c1e', halo: '#f2f2f7', ring: '#1c1c1e', match: '#ff9f0a', nodeDim: 0.18 };
+    ? { bg: '#1e1e1e', node: '#b3b3b3', tag: '#5fa777', accent: '#a78bfa', edge: 'rgba(255,255,255,0.15)', label: 'rgba(220,221,222,0.86)', labelHi: '#ffffff', halo: '#1e1e1e', ring: '#ffffff', match: '#ffd60a', nodeDim: 0.14 }
+    : { bg: '#ffffff', node: '#8a8a8a', tag: '#3f9c61', accent: '#7c5cf0', edge: 'rgba(0,0,0,0.14)', label: 'rgba(46,46,46,0.86)', labelHi: '#000000', halo: '#ffffff', ring: '#1c1c1e', match: '#ff9f0a', nodeDim: 0.16 };
 }
 
 // ---------------------------------------------------------------- simulation
@@ -618,6 +698,15 @@ function frame(now) {
     S.dirty = true;
   }
   if (S.tween) stepTween(now);
+  const focus = focusNode();
+  const target = focus ? 1 : 0;
+  S.fadeBusy = S.fade !== target;
+  if (S.fadeBusy) {
+    S.fade += (target - S.fade) * (S.reduced ? 1 : ACCENT_MIX);
+    if (Math.abs(target - S.fade) < 0.01) S.fade = target;
+    S.dirty = true;
+  }
+  if (focus) S.fadeNode = focus;
   if (S.dirty) {
     draw();
     S.dirty = false;
@@ -626,7 +715,12 @@ function frame(now) {
   S.stats.drawMs = t2 - t1;
   S.stats.frameMs = t2 - t0;
   S.stats.frames += 1;
-  if (S.alpha > ALPHA_MIN || S.alphaTarget > 0 || S.tween) S.raf = requestAnimationFrame(frame);
+  if (S.alpha > ALPHA_MIN || S.alphaTarget > 0 || S.tween || S.fadeBusy) S.raf = requestAnimationFrame(frame);
+}
+
+function focusNode() {
+  if (S.sel && S.sel.vis) return S.sel;
+  return S.hover && S.hover.vis ? S.hover : null;
 }
 
 function tick() {
@@ -644,7 +738,7 @@ function tick() {
       dy = (Math.random() - 0.5) * 1e-3;
     }
     const l = Math.sqrt(dx * dx + dy * dy);
-    const strength = 1 / Math.min(a.deg || 1, b.deg || 1);
+    const strength = S.tune.link / Math.min(a.deg || 1, b.deg || 1);
     const f = ((l - e.dist) / l) * alpha * strength;
     dx *= f;
     dy *= f;
@@ -663,8 +757,8 @@ function tick() {
       n.vy = 0;
       continue;
     }
-    n.vx -= n.x * GRAVITY * alpha;
-    n.vy -= n.y * GRAVITY * alpha;
+    n.vx -= n.x * GRAVITY * S.tune.center * alpha;
+    n.vy -= n.y * GRAVITY * S.tune.center * alpha;
     n.vx *= VELOCITY_KEEP;
     n.vy *= VELOCITY_KEEP;
     n.x += n.vx;
@@ -673,10 +767,8 @@ function tick() {
   S.alpha += (S.alphaTarget - S.alpha) * ALPHA_DECAY;
 }
 
-// Hubs with many links get longer springs so a day with 12 items (or a habit with 40
-// check-in days) opens into a star instead of a knot.
-function linkDistance(e) {
-  return LINK_DIST[e.kind] + 2.6 * Math.sqrt(e.a.deg * e.b.deg);
+function linkDistance() {
+  return LINK_DIST * S.tune.distance;
 }
 
 // Many-body repulsion through a uniform grid: nodes are counting-sorted into cells; pairs
@@ -744,7 +836,7 @@ function repel(vis, alpha) {
     mass[c] = sm;
     nonEmpty[ne++] = c;
   }
-  const K = REPEL * alpha;
+  const K = REPEL * S.tune.repel * alpha;
   // Near field: pairs inside a cell and with the four "forward" neighbour cells.
   for (let q = 0; q < ne; q++) {
     const c = nonEmpty[q];
@@ -975,11 +1067,14 @@ function draw() {
   g.setTransform(dpr * k, 0, 0, dpr * k, dpr * view.x, dpr * view.y);
 
   const sel = S.sel;
-  const adj = S.selAdj;
   const hover = S.hover;
+  const fnode = S.fade > 0 ? S.fadeNode : null;
+  if (fnode && !fnode.adjSet) fnode.adjSet = new Set(fnode.adj);
+  const adj = fnode ? fnode.adjSet : null;
   const searching = Boolean(S.query);
-  const dimming = Boolean(sel) || searching;
-  const isLit = (n) => (sel ? n === sel || adj.has(n.idx) : n.match);
+  const dimming = Boolean(fnode) || searching;
+  const dimLevel = fnode ? S.fade : 1;
+  const isLit = (n) => (fnode ? n === fnode || adj.has(n.idx) : n.match);
   // Culling bounds in world units.
   const wx0 = -view.x / k - 40;
   const wy0 = -view.y / k - 40;
@@ -988,16 +1083,18 @@ function draw() {
   const onScreen = (n) => n.x >= wx0 && n.x <= wx1 && n.y >= wy0 && n.y <= wy1;
 
   // Edges: one path for the plain ones, one for the highlighted ones.
-  g.lineWidth = Math.max(0.6, 1 / k);
+  const linkW = S.tune.linkWidth;
+  g.lineWidth = Math.max(0.5, 0.9 / k) * linkW;
   g.lineCap = 'round';
-  g.strokeStyle = dimming ? pal.edgeDim : pal.edge;
+  g.strokeStyle = pal.edge;
+  g.globalAlpha = dimming ? 1 - 0.8 * dimLevel : 1;
   g.beginPath();
   let lit = null;
   for (const e of S.visEdges) {
     const a = e.a;
     const b = e.b;
     if (!onScreen(a) && !onScreen(b)) continue;
-    if (dimming && (sel ? (a === sel || b === sel) : (a.match && b.match))) {
+    if (dimming && (fnode ? (a === fnode || b === fnode) : (a.match && b.match))) {
       if (!lit) lit = [];
       lit.push(e);
       continue;
@@ -1006,15 +1103,18 @@ function draw() {
     g.lineTo(b.x, b.y);
   }
   g.stroke();
+  g.globalAlpha = 1;
   if (lit) {
-    g.strokeStyle = pal.edgeHi;
-    g.lineWidth = Math.max(0.8, 1.4 / k);
+    g.strokeStyle = pal.accent;
+    g.globalAlpha = Math.max(0.15, dimLevel);
+    g.lineWidth = Math.max(0.8, 1.4 / k) * linkW;
     g.beginPath();
     for (const e of lit) {
       g.moveTo(e.a.x, e.a.y);
       g.lineTo(e.b.x, e.b.y);
     }
     g.stroke();
+    g.globalAlpha = 1;
   }
 
   // Nodes grouped by colour, bright then dimmed.
@@ -1026,6 +1126,7 @@ function draw() {
     let dimList = null;
     for (const n of list) {
       if (!onScreen(n)) continue;
+      if (n === fnode) continue;
       if (dimming && !isLit(n)) {
         if (!dimList) dimList = [];
         dimList.push(n);
@@ -1037,7 +1138,7 @@ function draw() {
     }
     g.fill();
     if (dimList) {
-      g.globalAlpha = pal.nodeDim;
+      g.globalAlpha = 1 - (1 - pal.nodeDim) * dimLevel;
       g.beginPath();
       for (const n of dimList) {
         const r = Math.max(minR, n.r);
@@ -1047,6 +1148,13 @@ function draw() {
       g.fill();
       g.globalAlpha = 1;
     }
+  }
+
+  if (fnode && fnode.vis) {
+    g.fillStyle = pal.accent;
+    g.beginPath();
+    g.arc(fnode.x, fnode.y, Math.max(minR, fnode.r), 0, TAU);
+    g.fill();
   }
 
   // Rings: search matches, hover, selection.
@@ -1062,22 +1170,6 @@ function draw() {
     }
     g.stroke();
   }
-  if (hover && hover.vis && hover !== sel) {
-    g.strokeStyle = pal.ring;
-    g.lineWidth = 1.5 / k;
-    g.beginPath();
-    const r = Math.max(minR, hover.r) + 2.5 / k;
-    g.arc(hover.x, hover.y, r, 0, TAU);
-    g.stroke();
-  }
-  if (sel && sel.vis) {
-    g.strokeStyle = pal.ring;
-    g.lineWidth = 2.5 / k;
-    g.beginPath();
-    const r = Math.max(minR, sel.r) + 3.5 / k;
-    g.arc(sel.x, sel.y, r, 0, TAU);
-    g.stroke();
-  }
 
   // Labels in screen space (constant size): selected + neighbours + hover + matches always;
   // everything at zoom >= 1.6 (day/tag hubs at >= 1.0), fading in over a short band.
@@ -1087,8 +1179,12 @@ function draw() {
   g.lineJoin = 'round';
   g.lineWidth = 3;
   g.strokeStyle = pal.halo;
-  const hubA = Math.min(1, Math.max(0, (k - 0.9) / 0.2));
-  const itemA = Math.min(1, Math.max(0, (k - 1.45) / 0.25));
+  // Bigger nodes keep their names further out, so the map stays readable when zoomed out.
+  const fadeBy = S.tune.textFade;
+  const labelAlpha = (n) => {
+    const start = (n.deg >= 12 ? 0.32 : n.deg >= 6 ? 0.6 : n.deg >= 3 ? 0.95 : 1.4) * fadeBy;
+    return Math.min(1, Math.max(0, (k - start) / 0.22));
+  };
   // Collect the candidates (selected first, then hover, neighbours, matches, then the rest)
   // and skip any label whose box overlaps one already placed.
   const wanted = [];
@@ -1096,12 +1192,11 @@ function draw() {
     if (!onScreen(n)) continue;
     let a;
     let pri;
-    if (n === sel) { a = 1; pri = 0; } else if (n === hover) { a = 1; pri = 1; } else if ((sel && adj.has(n.idx)) || n.match) { a = 1; pri = 2; } else {
-      const hub = n.type === 'day' || n.type === 'tag';
-      a = hub ? hubA : itemA;
+    if (n === sel) { a = 1; pri = 0; } else if (n === hover) { a = 1; pri = 1; } else if ((fnode && adj.has(n.idx)) || (searching && n.match)) { a = 1; pri = 2; } else {
+      a = labelAlpha(n);
       if (a <= 0) continue;
-      if (dimming) a *= 0.3;
-      pri = hub ? 3 : 4;
+      if (dimming) a *= 1 - 0.8 * dimLevel;
+      pri = n.deg >= 6 ? 3 : 4;
     }
     const p = worldToScreen(n.x, n.y);
     if (p.x < -200 || p.x > w + 200 || p.y < -40 || p.y > h + 40) continue;
@@ -1113,8 +1208,7 @@ function draw() {
   let font = '';
   for (const item of wanted) {
     const n = item.n;
-    const hub = n.type === 'day' || n.type === 'tag';
-    const wantFont = hub ? `600 11px ${LABEL_FONT}` : `11px ${LABEL_FONT}`;
+    const wantFont = `${n.deg >= 12 ? 13 : 11}px ${LABEL_FONT}`;
     if (wantFont !== font) {
       font = wantFont;
       g.font = font;
@@ -1363,9 +1457,13 @@ function openNodeById(id) {
 
 function openSelected() {
   const node = S.sel;
-  if (!node || !node.route) return;
+  if (!node) return;
   haptic('light');
-  S.ctx.nav.go(node.route);
+  if (node.meta.url) {
+    el('a', { href: node.meta.url, target: '_blank', rel: 'noopener' }).click();
+    return;
+  }
+  if (node.route) S.ctx.nav.go(node.route);
 }
 
 function renderCard(node) {
@@ -1384,8 +1482,8 @@ function renderCard(node) {
     cardDot.hidden = false;
   }
   const appLabel = node.app && S.appLabels ? S.appLabels[node.app] : null;
-  openBtn.hidden = !node.route;
-  openBtn.textContent = appLabel ? `Open in ${appLabel}` : 'Open';
+  openBtn.hidden = !node.route && !node.meta.url;
+  openBtn.textContent = node.meta.url ? 'Open on Instagram' : appLabel ? `Open in ${appLabel}` : 'Open';
   centreBtn.textContent = 'Centre';
   card.hidden = false;
 }
@@ -1423,6 +1521,10 @@ function describe(node) {
       if (node.date) parts.push(dateLabel(node.date, true));
       break;
     case 'tag':
+      break;
+    case 'reel':
+      if (m.views) parts.push(`${Number(m.views).toLocaleString()} views`);
+      if (node.date) parts.push(dateLabel(node.date));
       break;
     default:
       if (node.date) parts.push(dateLabel(node.date));
