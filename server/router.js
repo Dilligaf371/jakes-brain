@@ -7,15 +7,22 @@
 //
 //   r.get('/api/tasks', () => ({ tasks: repo.list() }));
 //   r.patch('/api/tasks/:id', async (req, res, { params }) => { const body = await readJsonBody(req); ... });
-import { HttpError, sendJson, sendError } from './http.js';
+//
+// router.stage() hands a module loader a router-shaped buffer: the routes a module registers
+// go live only when stage.commit() is called after its register() finished, so a register()
+// that throws halfway leaves no half-initialised routes behind.
+import { HttpError, sendJson, sendError, sendEmpty } from './http.js';
 import { isDbBusy } from './db.js';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+// Query keys that would land on Object.prototype instead of the handler's object.
+const UNSAFE_QUERY_KEYS = new Set(['__proto__']);
 
 export function createRouter({ log = console } = {}) {
   const routes = [];
 
-  function register(method, pattern, handler) {
+  // Validates and compiles a route (throws TypeError on a bad method / pattern / handler).
+  function compile(method, pattern, handler) {
     const verb = String(method || '').toUpperCase();
     if (!METHODS.includes(verb)) throw new TypeError(`router: unknown method ${method}`);
     if (typeof pattern !== 'string' || !pattern.startsWith('/')) throw new TypeError(`router: pattern must start with "/" (${pattern})`);
@@ -26,7 +33,11 @@ export function createRouter({ log = console } = {}) {
       return { kind: 'literal', value: seg };
     });
     const literals = segments.filter((s) => s.kind === 'literal').length;
-    routes.push({ method: verb, pattern, segments, literals, handler });
+    return { method: verb, pattern, segments, literals, handler };
+  }
+
+  function register(method, pattern, handler) {
+    routes.push(compile(method, pattern, handler));
     return api;
   }
 
@@ -84,16 +95,20 @@ export function createRouter({ log = console } = {}) {
       return false;
     }
 
+    // First value per key. Object.hasOwn (not `in`) so ?constructor=x or ?toString=y are
+    // ordinary params rather than being dropped because Object.prototype has that name.
     const query = {};
-    for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value;
+    for (const [key, value] of url.searchParams) {
+      if (UNSAFE_QUERY_KEYS.has(key) || Object.hasOwn(query, key)) continue;
+      query[key] = value;
+    }
     const ctx = { params: best.params, query, url, method: req.method };
     try {
       const result = await best.route.handler(req, res, ctx);
       if (result !== undefined && !res.headersSent) sendJson(res, 200, result);
       else if (result === undefined && !res.headersSent && !res.writableEnded) {
         // A handler that neither wrote nor returned: answer 204 rather than hang the client.
-        res.writeHead(204, { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
-        res.end();
+        sendEmpty(res, 204);
       }
     } catch (err) {
       if (err instanceof HttpError) {
@@ -102,16 +117,45 @@ export function createRouter({ log = console } = {}) {
         return true;
       }
       if (isDbBusy(err)) {
-        log.error(`[jakes-data] ${req.method} ${req.url}: database is busy (${err.message})`);
+        log.error(`${req.method} ${req.url}: database is busy (${err.message})`);
         if (!res.headersSent) sendError(res, 503, 'database is busy, try again', { 'Retry-After': '1' });
         else res.destroy();
         return true;
       }
-      log.error(`[jakes-data] ${req.method} ${req.url} failed:`, err);
+      log.error(`${req.method} ${req.url} failed:`, err);
       if (!res.headersSent) sendError(res, 500, 'internal error');
       else res.destroy();
     }
     return true;
+  }
+
+  // A router-shaped buffer (see the header comment). Patterns are validated at register time
+  // so a bad route still surfaces inside the module's register(); nothing is live until commit().
+  function stage() {
+    const staged = [];
+    const add = (method, pattern, handler) => {
+      staged.push(compile(method, pattern, handler));
+      return stagedApi;
+    };
+    const stagedApi = {
+      register: add,
+      get: (pattern, handler) => add('GET', pattern, handler),
+      post: (pattern, handler) => add('POST', pattern, handler),
+      put: (pattern, handler) => add('PUT', pattern, handler),
+      patch: (pattern, handler) => add('PATCH', pattern, handler),
+      delete: (pattern, handler) => add('DELETE', pattern, handler),
+      routes: () => staged.map((r) => `${r.method} ${r.pattern}`),
+      size: () => staged.length,
+      commit() {
+        for (const route of staged) routes.push(route);
+        staged.length = 0;
+        return api;
+      },
+      discard() {
+        staged.length = 0;
+      },
+    };
+    return stagedApi;
   }
 
   const api = {
@@ -122,6 +166,7 @@ export function createRouter({ log = console } = {}) {
     patch: (pattern, handler) => register('PATCH', pattern, handler),
     delete: (pattern, handler) => register('DELETE', pattern, handler),
     handle,
+    stage,
     routes: () => routes.map((r) => `${r.method} ${r.pattern}`),
   };
   return api;

@@ -539,7 +539,8 @@ button.row, a.row {
 .input::placeholder { color: var(--muted); }
 textarea.input { resize: none; line-height: 1.4; }
 
-/* Segmented control: buttons with aria-pressed. */
+/* Segmented control: buttons with aria-pressed. Drawn 30px tall (the row stays 48px); the
+   ::before extends each button's hit area to 44px without changing the look. */
 .segmented {
   display: inline-flex;
   padding: 2px;
@@ -549,6 +550,7 @@ textarea.input { resize: none; line-height: 1.4; }
 }
 
 .segmented > button {
+  position: relative;
   min-width: 44px;
   min-height: 30px;
   padding: 0 12px;
@@ -556,6 +558,12 @@ textarea.input { resize: none; line-height: 1.4; }
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
+}
+
+.segmented > button::before {
+  content: "";
+  position: absolute;
+  inset: -7px 0;
 }
 
 .segmented > button[aria-pressed="true"] {

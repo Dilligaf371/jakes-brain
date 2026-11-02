@@ -14,9 +14,14 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 let registry = { dock: [], grid: [], apps: {} };   // web/apps.json
 const modules = new Map();                           // id -> Promise<module default export>
 const cssLoaded = new Set();
-let current = null;                                  // { id, sub, root, inst }
+let builtApps = null;                                // ids with web/apps/<id>/index.js (GET /api/apps `web`); null until known
+let appsInflight = null;
+let appsError = null;                                // the last /api/apps failure (ApiError) when builtApps is still null
+let current = null;                                  // { id, sub, hash, root, inst }
 let pendingOrigin = null;                            // tile centre for the next open animation
-let busy = false;                                    // an open/close animation is running
+let busy = false;                                    // an open (load + mount + animation) or close animation is running
+let closing = false;                                 // the close animation specifically (a tile tap may queue behind it)
+let openSeq = 0;                                     // bumps on every navigation; an in-flight openApp checks it is still wanted
 let chain = Promise.resolve();                       // route() calls run one after another
 let loadedBuild = null;
 let pendingReload = false;
@@ -59,6 +64,20 @@ export function parseHash(hash) {
   return id ? { id, sub } : { id: null, sub: '' };
 }
 
+// Swap the current history entry's hash without routing (no hashchange fires). Returns
+// false when the browser refused.
+function silentReplace(hash) {
+  const h = normalizeHash(hash);
+  if (h === location.hash) return true;
+  try {
+    history.replaceState(history.state, '', h);
+  } catch {
+    return false;
+  }
+  entries.set(hIdx, { hash: h, id: parseHash(h).id });
+  return true;
+}
+
 Object.assign(nav, {
   go(hash) {
     const h = normalizeHash(hash);
@@ -68,13 +87,10 @@ Object.assign(nav, {
   replace(hash) {
     const h = normalizeHash(hash);
     if (h === location.hash) return;
-    try {
-      history.replaceState(history.state, '', h);
-    } catch {
+    if (!silentReplace(h)) {
       location.hash = h;
       return;
     }
-    entries.set(hIdx, { hash: h, id: parseHash(h).id });
     route();
   },
   back() {
@@ -89,10 +105,39 @@ Object.assign(nav, {
   },
 });
 
+// ---------------------------------------------------------------- registry
+
+// apps.json is a plain object, so look ids up with hasOwn: '#/constructor' or '#/__proto__'
+// must be "No such app", not Object.prototype members.
+function appMeta(id) {
+  return typeof id === 'string' && Object.hasOwn(registry.apps, id) && registry.apps[id] && typeof registry.apps[id] === 'object'
+    ? registry.apps[id]
+    : null;
+}
+
+// Which web apps exist, from the server (GET /api/apps -> { apps: [server modules], web: [ids] }).
+// Lets a tap on an unbuilt tile say "Not built yet" with no network round trip and no 404
+// in the console. Refreshed on boot, on foreground/online, and after a "not built" answer.
+function refreshApps() {
+  if (appsInflight) return appsInflight;
+  appsInflight = api('/api/apps', { timeout: 5000 })
+    .then((data) => {
+      appsError = null;
+      if (data && Array.isArray(data.web)) builtApps = data.web.map(String);
+    })
+    .catch((err) => {
+      appsError = err;
+    })
+    .finally(() => {
+      appsInflight = null;
+    });
+  return appsInflight;
+}
+
 // ---------------------------------------------------------------- home screen
 
 function tileButton(id) {
-  const meta = registry.apps[id] || { label: id, color: '#8e8e93' };
+  const meta = appMeta(id) || { label: id, color: '#8e8e93' };
   const tile = el('span', { class: `tile${meta.tile === 'calendar' ? ' tile-calendar' : ''}` });
   if (meta.tile === 'calendar') {
     tile.append(el('span', { class: 'cal-wd' }), el('span', { class: 'cal-day' }));
@@ -107,8 +152,10 @@ function tileButton(id) {
   return btn;
 }
 
+// A tap that lands while the previous app is still animating closed is kept (route() calls
+// are chained, so it opens right after the close finishes) instead of being dropped.
 function onTileTap(id, tile) {
-  if (busy || current) return;
+  if (current || (busy && !closing)) return;
   haptic('light');
   const r = tile.getBoundingClientRect();
   pendingOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -116,8 +163,8 @@ function onTileTap(id, tile) {
 }
 
 function renderHome() {
-  els.grid.replaceChildren(...registry.grid.filter((id) => registry.apps[id]).map(tileButton));
-  els.dock.replaceChildren(...registry.dock.filter((id) => registry.apps[id]).map(tileButton));
+  els.grid.replaceChildren(...registry.grid.filter((id) => appMeta(id)).map(tileButton));
+  els.dock.replaceChildren(...registry.dock.filter((id) => appMeta(id)).map(tileButton));
   updateDate();
 }
 
@@ -166,18 +213,28 @@ function ensureCss(id) {
 }
 
 // Resolves the app module ({ mount, unmount, route }). Rejects with .notBuilt = true when
-// web/apps/<id>/index.js does not exist (the other builders have not shipped it yet).
+// web/apps/<id>/index.js does not exist (the other builders have not shipped it yet) and
+// .network = true when the PC cannot be reached. Decided from the server's list of built
+// apps; the HEAD probe is only the fallback when that list is unavailable.
 function loadModule(id) {
   if (!modules.has(id)) {
     const p = (async () => {
       const url = `/apps/${id}/index.js`;
-      let head;
-      try {
-        head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-      } catch {
-        throw Object.assign(new Error('network'), { network: true });
+      const notBuilt = () => Object.assign(new Error('not built'), { notBuilt: true });
+      const network = () => Object.assign(new Error('network'), { network: true });
+      if (builtApps === null) await refreshApps();
+      if (builtApps !== null) {
+        if (!builtApps.includes(id)) throw notBuilt();
+      } else if (appsError && appsError.status === 0) {
+        throw network();
+      } else {
+        try {
+          await api(url, { method: 'HEAD', raw: true, timeout: 8000 });
+        } catch (err) {
+          if (err && err.status === 404) throw notBuilt();
+          throw network();
+        }
       }
-      if (head.status === 404) throw Object.assign(new Error('not built'), { notBuilt: true });
       const cssReady = ensureCss(id);
       const mod = (await import(url)).default;
       if (!mod || typeof mod.mount !== 'function') throw new Error(`${url} has no mount()`);
@@ -217,19 +274,51 @@ function waitAnimation(node, ms) {
   });
 }
 
+// Loads the module FIRST; the layer, the animation and the unmount of a previous app only
+// happen once it is in hand. A tile whose app is not built just toasts and stays home; an
+// app→app jump (Settings → Weather) that fails leaves the current app on screen.
 async function openApp(id, sub, origin) {
-  const layer = els.app;
-  const meta = registry.apps[id] || { label: id };
+  const meta = appMeta(id) || { label: id };
+  const seq = ++openSeq;
   busy = true;
+  let mod;
+  try {
+    mod = await loadModule(id);
+  } catch (err) {
+    if (seq !== openSeq) return; // superseded by a newer navigation, which owns `busy` now
+    busy = false;
+    if (err && err.notBuilt) {
+      toast('Not built yet');
+      refreshApps(); // it may have been built since the list was fetched
+    } else if (err && err.network) {
+      toast("Can't reach the PC", { kind: 'error' });
+    } else {
+      console.error(`[launcher] ${id} failed to load`, err);
+      toast(`${meta.label} failed to load`, { kind: 'error' });
+    }
+    if (current) {
+      // Stay in the app we came from: put its hash back without routing.
+      silentReplace(current.hash || `#/${current.id}`);
+    } else {
+      els.home.classList.remove('dim', 'behind');
+      if (location.hash !== '#/') nav.replace('#/');
+    }
+    return;
+  }
+  if (seq !== openSeq) return; // superseded while loading
+
+  const prev = current;
+  if (prev) unmount(prev); // jumping straight from one app to another (deep link): swap without the home animation
+  const layer = els.app;
   layer.replaceChildren();
   layer.scrollTop = 0;
   layer.hidden = false;
   const root = el('div', { class: `app-${id} app-root` });
   layer.append(root);
-  current = { id, sub, root, inst: null };
+  current = { id, sub, hash: location.hash, root, inst: mod };
   document.body.classList.add('app-open');
 
-  const animate = Boolean(origin) && !reducedMotion;
+  const animate = Boolean(origin) && !prev && !reducedMotion;
   let animation = Promise.resolve();
   if (animate) {
     layer.style.transformOrigin = `${origin.x}px ${origin.y}px`;
@@ -244,38 +333,14 @@ async function openApp(id, sub, origin) {
     els.home.classList.add('dim', 'behind');
   }
 
-  let mod;
   try {
-    mod = await loadModule(id);
-  } catch (err) {
-    if (current && current.root === root) {
-      if (err && err.notBuilt) toast('Not built yet');
-      else if (err && err.network) toast("Can't reach the PC", { kind: 'error' });
-      else {
-        console.error(`[launcher] ${id} failed to load`, err);
-        toast(`${meta.label} failed to load`, { kind: 'error' });
-      }
-      await animation;
-      busy = false;
-      await closeApp();
-      if (location.hash !== '#/') nav.replace('#/');
-    }
-    busy = false;
-    return;
-  }
-  if (!current || current.root !== root) {
-    busy = false;
-    return; // superseded by a newer navigation
-  }
-  current.inst = mod;
-  try {
-    await mod.mount(root, makeCtx(id, sub));
+    await mod.mount(root, makeCtx(id, current.sub));
   } catch (err) {
     console.error(`[launcher] ${id}.mount() threw`, err);
     toast(`${meta.label} failed to open`, { kind: 'error' });
   }
   await animation;
-  busy = false;
+  if (seq === openSeq) busy = false;
 }
 
 async function closeApp() {
@@ -288,6 +353,7 @@ async function closeApp() {
     return;
   }
   busy = true;
+  closing = true;
   els.home.classList.remove('behind');
   if (!reducedMotion) {
     layer.classList.remove('opening');
@@ -301,6 +367,7 @@ async function closeApp() {
   unmount(prev);
   layer.hidden = true;
   layer.replaceChildren();
+  closing = false;
   busy = false;
 }
 
@@ -309,20 +376,26 @@ async function doRoute() {
   const { id, sub } = parseHash(location.hash);
 
   if (!id) {
-    if (current) await closeApp();
-    else els.home.classList.remove('dim', 'behind');
+    openSeq += 1; // cancels an open that is still loading its module
+    if (current) {
+      await closeApp();
+    } else {
+      busy = false;
+      els.home.classList.remove('dim', 'behind');
+    }
     refreshBadges();
     return;
   }
-  if (!registry.apps[id]) {
+  if (!appMeta(id)) {
     toast('No such app');
     nav.replace('#/');
     return;
   }
   if (current && current.id === id) {
     current.sub = sub;
+    current.hash = location.hash;
     const inst = current.inst;
-    if (!inst) return; // still loading; mount() will receive the latest sub via ctx below
+    if (!inst) return;
     if (typeof inst.route === 'function') {
       try {
         await inst.route(sub);
@@ -335,7 +408,7 @@ async function doRoute() {
       unmount(old);
       els.app.append(root);
       els.app.scrollTop = 0;
-      current = { id, sub, root, inst };
+      current = { id, sub, hash: location.hash, root, inst };
       try {
         await inst.mount(root, makeCtx(id, sub));
       } catch (err) {
@@ -343,11 +416,6 @@ async function doRoute() {
       }
     }
     return;
-  }
-  if (current) {
-    // Jumping straight from one app to another (deep link): swap without the home animation.
-    unmount(current);
-    current = null;
   }
   const origin = pendingOrigin;
   pendingOrigin = null;
@@ -358,6 +426,7 @@ function route() {
   chain = chain.then(doRoute).catch((err) => {
     console.error('[launcher] route failed', err);
     busy = false;
+    closing = false;
   });
   return chain;
 }
@@ -394,6 +463,7 @@ function refreshAll() {
   if (document.hidden) return;
   updateDate();
   pollVersion();
+  refreshApps();
   refreshBadges();
 }
 
@@ -420,7 +490,7 @@ async function boot() {
   try {
     const res = await fetch('/apps.json', { cache: 'no-store' });
     const data = await res.json();
-    if (data && typeof data === 'object' && data.apps) {
+    if (data && typeof data === 'object' && data.apps && typeof data.apps === 'object') {
       registry = { dock: Array.isArray(data.dock) ? data.dock : [], grid: Array.isArray(data.grid) ? data.grid : [], apps: data.apps };
     }
   } catch (err) {
@@ -428,6 +498,7 @@ async function boot() {
     toast("Couldn't load apps.json", { kind: 'error' });
   }
   renderHome();
+  refreshApps(); // not awaited: loadModule() waits for it only when it needs the list
   window.addEventListener('hashchange', route);
   await route();
   pollVersion();

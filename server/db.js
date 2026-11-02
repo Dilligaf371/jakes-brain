@@ -78,10 +78,11 @@ export function openDb(dataDir) {
   db.exec('PRAGMA synchronous = NORMAL');
   db.exec('PRAGMA foreign_keys = ON');
   ensureMigrationsTable(db);
-  applyMigrations(db, 'core', CORE_MIGRATIONS);
+  const appliedCore = applyMigrations(db, 'core', CORE_MIGRATIONS);
   const store = {
     db,
     file,
+    appliedCore, // core migration ids applied by this open (index.js logs them)
     // Applies a module's migrations that have not run yet; returns the ids applied now.
     applyMigrations(moduleId, migrations) {
       return applyMigrations(db, moduleId, migrations);
@@ -179,8 +180,10 @@ function settingsRepo(db) {
   };
 
   return {
+    // A null-prototype object: a key such as "__proto__" (rejected on write since v2, but an
+    // old row could exist) is an ordinary entry here instead of hitting the prototype setter.
     all() {
-      const out = {};
+      const out = Object.create(null);
       for (const row of allStmt.all()) out[row.key] = decode(row.value);
       return out;
     },

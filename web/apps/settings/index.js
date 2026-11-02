@@ -1,7 +1,9 @@
 // Settings app: the v1 About view (server address, build, started, shell, Reload, how to
 // update) + per-app rows: Weather city (read-only, set in Weather), JakeGPT default model
 // (picker from /api/jakegpt/models -> settings gpt.model; a muted "JakeGPT not available" row
-// when that endpoint is missing / 503 / unreachable), units (°F / °C -> settings weather.units).
+// when that module is not loaded / 503 / unreachable), units (°F / °C -> settings weather.units).
+// GET /api/apps says which server modules and web apps exist, so nothing here probes a route
+// that would 404 (a console error) and the Weather row only links out when Weather is built.
 import * as kit from '../../kit.js';
 
 const { api, el, fmt, toast, haptic, navbar, section, actionSheet, icon, shellVersion, nav } = kit;
@@ -12,7 +14,7 @@ let listeners = [];
 
 export default {
   mount(root) {
-    state = { settings: {}, version: null, models: null, modelsError: null };
+    state = { settings: {}, version: null, models: null, modelsError: null, serverApps: null, webApps: null };
 
     const about = {
       base: el('span', { class: 'v mono', text: location.origin }),
@@ -27,7 +29,7 @@ export default {
 
     // Weather city (read-only here; the Weather app sets it)
     const cityValue = el('span', { class: 'right', text: '—' });
-    const cityRow = el('button', { class: 'row tappable', type: 'button', 'on:click': () => nav.go('#/weather') },
+    const cityRow = el('button', { class: 'row tappable', type: 'button', 'on:click': openWeather },
       el('span', { class: 'label', text: 'Weather city' }), cityValue, chevron());
     const cityHint = el('p', { class: 'hint', text: 'Set it in Weather.' });
 
@@ -57,7 +59,7 @@ export default {
         el('p', { class: 'blurb', html: 'Edit <code>web/</code> or <code>server/</code> in <code>~/jakes-data-app</code> on the PC (or run <code>deploy/deploy.sh</code> from the Mac). The app refreshes itself within 30 seconds.' }),
       ),
     );
-    els = { about, cityValue, modelValue, modelRow, unitF, unitC };
+    els = { about, cityValue, cityRow, modelValue, modelRow, unitF, unitC };
 
     load();
     listen(window, 'jakesdata:online', load);
@@ -83,16 +85,34 @@ function chevron() {
   return c;
 }
 
+// Weather is a separate app; while it is not built, say so here instead of bouncing the
+// user out of Settings.
+function openWeather() {
+  if (state && state.webApps && !state.webApps.includes('weather')) {
+    toast('Weather is not built yet');
+    return;
+  }
+  nav.go('#/weather');
+}
+
 async function load() {
   if (!state) return;
-  const [version, settings, models] = await Promise.all([
+  const [version, settings, apps] = await Promise.all([
     api('/api/version').catch(() => null),
     api('/api/settings').catch(() => null),
-    api('/api/jakegpt/models', { timeout: 6000 }).then((m) => ({ ok: true, value: m })).catch((err) => ({ ok: false, error: err })),
+    api('/api/apps', { timeout: 5000 }).catch(() => null),
   ]);
   if (!state) return;
   if (version) state.version = version;
   if (settings && settings.settings) state.settings = settings.settings;
+  state.serverApps = apps && Array.isArray(apps.apps) ? apps.apps.map(String) : null;
+  state.webApps = apps && Array.isArray(apps.web) ? apps.web.map(String) : null;
+  // Only ask JakeGPT for its models when its server module is loaded (otherwise the route is a 404).
+  const hasGpt = Boolean(state.serverApps && state.serverApps.includes('jakegpt'));
+  const models = hasGpt
+    ? await api('/api/jakegpt/models', { timeout: 6000 }).then((m) => ({ ok: true, value: m })).catch((err) => ({ ok: false, error: err }))
+    : { ok: false, error: new Error('JakeGPT is not installed') };
+  if (!state) return;
   if (models.ok && models.value && Array.isArray(models.value.models)) {
     state.models = models.value;
     state.modelsError = null;
@@ -113,6 +133,7 @@ function render() {
   const city = state.settings['weather.city'];
   els.cityValue.textContent = typeof city === 'string' && city ? city : 'Not set';
   els.cityValue.classList.toggle('muted', !city);
+  els.cityRow.classList.toggle('unbuilt', Boolean(state.webApps && !state.webApps.includes('weather')));
 
   if (state.models) {
     const chosen = state.settings['gpt.model'] || state.models.default || '—';

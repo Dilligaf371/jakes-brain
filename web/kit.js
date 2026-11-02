@@ -582,8 +582,13 @@ export function debounce(fn, ms) {
 
 // Escapes, then ```blocks```, `code`, **bold**, headings, "- " / "1. " lists and paragraphs
 // (single newlines inside a paragraph become <br>). Returns an HTML string.
+// Placeholders for the lifted blocks use C0 control characters, so those (except tab /
+// newline) are stripped from the input first: they never belong in text and would
+// otherwise collide with the markers.
 export function renderMarkdownLite(text) {
-  const src = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
+  const src = String(text == null ? '' : text)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
   const blocks = [];
   const withBlocks = src.replace(/```([\w+-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     blocks.push(`<pre class="md-pre"><code${lang ? ` data-lang="${esc(lang)}"` : ''}>${esc(code.replace(/\n$/, ''))}</code></pre>`);
@@ -596,7 +601,7 @@ export function renderMarkdownLite(text) {
       return `\u0001${codes.length - 1}\u0001`;
     });
     out = out.replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
-    out = out.replace(/\u0001(\d+)\u0001/g, (_, i) => codes[Number(i)]);
+    out = out.replace(/\u0001(\d+)\u0001/g, (m, i) => (codes[Number(i)] === undefined ? m : codes[Number(i)]));
     return out;
   };
   const html = [];
@@ -616,5 +621,5 @@ export function renderMarkdownLite(text) {
       html.push(`<p>${lines.map(inline).join('<br>')}</p>`);
     }
   }
-  return html.join('').replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[Number(i)]);
+  return html.join('').replace(/\u0000(\d+)\u0000/g, (m, i) => (blocks[Number(i)] === undefined ? m : blocks[Number(i)]));
 }

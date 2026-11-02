@@ -11,13 +11,19 @@ iPhone  ──Tailscale (anywhere) or home WiFi──▶  PC :4800  (node server
                                                 └── jakes-data.service (systemd --user, always on)
 ```
 
-## What's in the app (v1)
+## What's in the app (v2)
 
-- **Home** — the PC at a glance: uptime, load, memory, disk, and one row per service
+The first screen is a home screen of Jake's own apps (see `SPEC.md` for the full list and
+each app's contract). Everything lives in SQLite on the PC, so anything running there
+(Claude Code, Codex, a cron job) can read or write it.
+
+- **Server** — the PC at a glance: uptime, load, memory, disk, and one row per service
   (reels tracker, Pocket 3 recorder, auto-vlog builder, feed accounts, Zora bot, Ollama, Jake's Data).
-- **Notes** — quick capture. Notes live in SQLite on the PC, so anything running there
-  (Claude Code, Codex, a cron job) can read or write them.
-- **About** — which address the phone is using, what build is deployed, and a Reload button.
+- **Tasks** — the quick-capture checklist from v1 (its table was renamed from `notes` to `tasks`).
+- **Settings** — which address the phone is using, what build is deployed, a Reload button,
+  and per-app settings.
+- Notes, Calendar, Jakestagram, JakeTube, JakeGPT, Habits, Files, Weather — each its own app
+  under `web/apps/<id>/` + `server/apps/<id>.js`.
 
 ## Making changes
 
@@ -76,4 +82,5 @@ database is `~/jakes-data-app-data/jakesdata.db` on the PC.
 |---|---|
 | PC over Tailscale | http://100.106.249.89:4800 |
 | PC on home WiFi | http://192.168.1.81:4800 |
-| Health | `/api/health` · Version `/api/version` · Status `/api/status` · Notes `/api/notes` |
+| Health | `/api/health` · Version `/api/version` · Status `/api/status` · Apps `/api/apps` |
+| Core data | Settings `/api/settings` · Tasks `/api/tasks` (badge `/api/tasks/badge`) · each app under `/api/<id>/…` |

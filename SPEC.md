@@ -32,13 +32,17 @@ jakes-data-app/
   README.md          human docs: what it is, how to update, how to install on the phone
   CLAUDE.md          agent-facing rules (AGENTS.md is the same file for Codex)
   server/            Node 22, ZERO npm dependencies (node:http, node:sqlite, node:fs, node:child_process)
-    index.js         entry: static files from ../web + /api routes
-    db.js            node:sqlite (DatabaseSync) open + migrations
-    api.js           route handlers
+    index.js         entry: static files from ../web, /media + /cache, core /api routes, loads apps/*.js
+    db.js            node:sqlite (DatabaseSync) open + migrations registry + settings
+    router.js        register(method, pattern, handler), ':param' segments, 404/405 JSON
+    http.js          sendJson/sendError, body readers, sendFile with Range support, CORS allow-list
+    tools.js         ffmpeg/ffprobe resolution, execFile wrapper, concurrency-1 queue, fetchJson
     status.js        machine + service status collection
-    config.json      services to show on Home (see below)
+    config.json      services, tools, file roots, video channels, gpt, weather (see below)
+    apps/<id>.js     one server module per app (see "Server (server/) — core contract")
   web/               plain HTML/CSS/JS, NO build step, mobile-first (390px), dark+light
-    index.html  app.js  styles.css  manifest.webmanifest  icons/
+    index.html  kit.js  launcher.js  styles.css  apps.json  manifest.webmanifest  icons/
+    apps/<id>/       index.js + styles.css per app (see "Web (web/) — core contract")
   ios/               xcodegen project (project.yml) -> JakesData.xcodeproj (generated, gitignored)
     Jake's Data/              Swift sources + Assets.xcassets + Info.plist
   deploy/

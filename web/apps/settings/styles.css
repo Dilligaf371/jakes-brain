@@ -8,4 +8,5 @@
 .app-settings .row.unavailable { cursor: default; }
 .app-settings .row.unavailable .chev { visibility: hidden; }
 .app-settings .row.unavailable:active { background: none; margin: 0; padding-left: 0; padding-right: 0; }
+.app-settings .row.unbuilt .chev { visibility: hidden; }
 .app-settings .row .segmented { margin-left: auto; }

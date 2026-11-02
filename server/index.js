@@ -6,6 +6,8 @@
 //   JAKESDATA_DATA   ($HOME/jakes-data-app-data)     JAKESDATA_WEB     (<repo>/web)
 //   JAKESDATA_CONFIG (<repo>/server/config.json)     JAKESDATA_OLLAMA  (http://127.0.0.1:11434)
 //   JAKESDATA_FFMPEG / JAKESDATA_FFPROBE             (else config.tools, else PATH)
+//   JAKESDATA_CORS   extra allowed origins, comma-separated ('*' = any; default: none beyond
+//                    this server's own addresses on its port and loopback dev servers)
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -17,7 +19,7 @@ import { openDb, isDbBusy } from './db.js';
 import { createRouter } from './router.js';
 import { createTools } from './tools.js';
 import { collectStatus } from './status.js';
-import { sendJson, sendError, sendEmpty, sendFile, readJsonBody, HttpError } from './http.js';
+import { sendJson, sendError, sendEmpty, sendFile, readJsonBody, HttpError, cors, configureCors } from './http.js';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const repoDir = path.resolve(serverDir, '..');
@@ -34,7 +36,12 @@ const INDEX_FILE = path.join(WEB_DIR, 'index.html');
 const GIT_CACHE_MS = 10_000;
 const APP_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const SETTING_KEY_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
+// Names that land on Object.prototype instead of being a plain key (invisible garbage rows).
+const SETTING_KEY_BLOCKED = new Set(['__proto__', 'constructor', 'prototype']);
 const SETTING_STRING_MAX = 4096;
+const REGISTER_TIMEOUT_MS = 20_000; // an async register() that never settles must not block startup
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const CORS_EXTRA = String(process.env.JAKESDATA_CORS || '').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
 const startedAt = new Date();
 
 // Icons/images may be cached for a day; everything else (html/js/css/json/svg/webmanifest)
@@ -44,6 +51,7 @@ const LONG_CACHE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif
 const log = makeLog('jakes-data');
 const cfg = loadConfig(CONFIG_FILE);
 const store = openStore(DATA_DIR);
+configureCors(originAllowed);
 for (const dir of [MEDIA_DIR, CACHE_DIR]) fs.mkdirSync(dir, { recursive: true });
 // Symlink-resolved roots: a stray symlink inside web/ or the data dir must not let the
 // static servers read files outside them.
@@ -90,6 +98,15 @@ function shutdown(signal) {
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+// A module's fire-and-forget mistake (a background probe without .catch, a throw inside a
+// timer) is logged like a 500 instead of ending the process: one bug in one app must not
+// take every app offline (and under Restart=always, crash-loop in the journal).
+process.on('unhandledRejection', (reason) => {
+  log.error('unhandled rejection (the server stays up):', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err, origin) => {
+  log.error(`uncaught exception (${origin}; the server stays up):`, err && err.stack ? err.stack : err);
+});
 
 // ---------------------------------------------------------------- setup
 
@@ -124,7 +141,9 @@ function loadConfig(file) {
 // or a regular file (under Restart=always this would otherwise crash-loop in the journal).
 function openStore(dataDir) {
   try {
-    return openDb(dataDir);
+    const opened = openDb(dataDir);
+    if (opened.appliedCore && opened.appliedCore.length) log.info(`core: applied migrations ${opened.appliedCore.join(', ')}`);
+    return opened;
   } catch (err) {
     const what = err && err.code === 'ERR_SQLITE_ERROR'
       ? `cannot open database ${path.join(dataDir, 'jakesdata.db')}`
@@ -140,6 +159,59 @@ function realpathOr(dir) {
   } catch {
     return dir;
   }
+}
+
+// CORS allow-list: an origin is this server under one of its own names/addresses on its port
+// (the page loaded via the Tailscale IP calling the LAN IP), a loopback dev server at any port
+// (only code already running on the viewer's own device can produce that origin), or a
+// JAKESDATA_CORS entry. Everything else gets no CORS headers at all.
+let ownHostsCache = { at: 0, hosts: new Set() };
+function ownHosts() {
+  if (Date.now() - ownHostsCache.at < 60_000) return ownHostsCache.hosts;
+  const hosts = new Set();
+  try { hosts.add(String(os.hostname()).toLowerCase()); } catch { /* ignore */ }
+  try {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const ni of list || []) if (ni && ni.address) hosts.add(String(ni.address).toLowerCase().replace(/%.*$/, ''));
+    }
+  } catch { /* ignore */ }
+  ownHostsCache = { at: Date.now(), hosts };
+  return hosts;
+}
+
+function originAllowed(origin) {
+  if (CORS_EXTRA.includes('*') || CORS_EXTRA.includes(origin)) return true;
+  let u;
+  try {
+    u = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (LOOPBACK_HOSTS.has(host)) return true;
+  const port = Number(u.port || (u.protocol === 'https:' ? 443 : 80));
+  return port === PORT && ownHosts().has(host);
+}
+
+// Ids of the web apps that exist: web/apps/<id>/index.js. The launcher uses this to say
+// "Not built yet" without probing (a 404 would be a console error on every tap).
+function listWebApps() {
+  const dir = path.join(WEB_DIR, 'apps');
+  let names = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names.filter((name) => {
+    if (!APP_ID_RE.test(name)) return false;
+    try {
+      return fs.statSync(path.join(dir, name, 'index.js')).isFile();
+    } catch {
+      return false;
+    }
+  }).sort();
 }
 
 // `~` and `~/x` -> the server user's home.
@@ -176,7 +248,9 @@ function makeCtx(id) {
 
 // readdirSync(server/apps) -> import each default export { id, migrations, register(r, ctx) },
 // apply its migrations (alphabetical by module id, after core), then register its routes.
-// A module that throws at any of those steps is logged and skipped; the server stays up.
+// A module that throws (or returns a rejecting promise, or never settles) at any of those
+// steps is logged and skipped; the server stays up. Routes are registered through a staging
+// router and only go live once register() has finished, so a throw halfway leaves nothing.
 async function loadModules(dir) {
   let names = [];
   try {
@@ -212,14 +286,25 @@ async function loadModules(dir) {
       log.error(`module ${name}: migrations failed, module skipped:`, err && err.stack ? err.stack : err);
       continue;
     }
+    const staged = router.stage();
     try {
-      mod.register(router, makeCtx(mod.id));
+      await withTimeout(Promise.resolve(mod.register(staged, makeCtx(mod.id))), REGISTER_TIMEOUT_MS, `register() did not finish within ${REGISTER_TIMEOUT_MS / 1000} s`);
+      staged.commit();
       registered.push(mod.id);
     } catch (err) {
+      staged.discard();
       log.error(`module ${name}: register() threw, module skipped:`, err && err.stack ? err.stack : err);
     }
   }
   return registered;
+}
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // ---------------------------------------------------------------- core routes
@@ -284,16 +369,17 @@ function registerCore(r) {
 
   r.get('/api/status', () => collectStatus(cfg));
 
-  r.get('/api/apps', () => ({ apps: modules.slice() }));
+  // apps = server modules that registered; web = web/apps/<id>/index.js that exist.
+  r.get('/api/apps', () => ({ apps: modules.slice(), web: listWebApps() }));
 
   r.get('/api/settings', () => ({ settings: store.settings.all() }));
 
   r.patch('/api/settings', async (req) => {
     const body = await readJsonBody(req);
-    const keys = Object.keys(body);
+    const keys = Object.keys(body).filter((key) => Object.hasOwn(body, key));
     if (!keys.length) throw new HttpError(400, 'nothing to update: send { key: value }');
     for (const key of keys) {
-      if (!SETTING_KEY_RE.test(key)) throw new HttpError(400, `bad setting key: ${JSON.stringify(key)}`);
+      if (!SETTING_KEY_RE.test(key) || SETTING_KEY_BLOCKED.has(key)) throw new HttpError(400, `bad setting key: ${JSON.stringify(key)}`);
       const value = body[key];
       if (value === null) continue;
       if (typeof value === 'string') {
@@ -329,7 +415,9 @@ async function handle(req, res) {
   }
 
   try {
-    if (req.method === 'OPTIONS') return sendEmpty(res, 204, { 'Access-Control-Max-Age': '600' });
+    // CORS headers only for an allowed Origin (see originAllowed); the app is same-origin.
+    const corsAllowed = cors(req, res);
+    if (req.method === 'OPTIONS') return sendEmpty(res, 204, corsAllowed ? { 'Access-Control-Max-Age': '600' } : {});
     const p = url.pathname;
     if (p === '/api' || p.startsWith('/api/')) {
       const handled = await router.handle(req, res, url);
@@ -395,6 +483,9 @@ async function serveStatic(req, res, url) {
   if (pathname === null) return;
 
   const relative = pathname.replace(/^\/+/, '');
+  // Dotfiles (.DS_Store, .env, editor swap files, a .git if JAKESDATA_WEB ever points at a
+  // repo root) are never served, same rule as /media and /cache.
+  if (relative.split('/').some((seg) => seg.startsWith('.'))) return sendJson(res, 404, { error: 'not found' });
   let filePath = relative ? path.resolve(WEB_DIR, relative) : INDEX_FILE;
   if (filePath !== WEB_DIR && !filePath.startsWith(WEB_DIR + path.sep)) {
     return sendJson(res, 400, { error: 'bad path' });

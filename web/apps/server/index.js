@@ -2,7 +2,7 @@
 // from server/config.json, refreshed every 30 s while open and on foreground/online.
 import * as kit from '../../kit.js';
 
-const { api, el, fmt, navbar, section } = kit;
+const { api, el, navbar, section } = kit;
 
 const POLL_MS = 30_000;
 
@@ -102,7 +102,7 @@ function render() {
 function renderServices(services) {
   const rows = services.map((svc) => {
     const active = svc.active || 'unknown';
-    const right = svc.since ? fmt.relTime(svc.since) : active;
+    const right = svc.since ? fmtRel(svc.since) : active;
     return el('li', { class: 'row', title: svc.unit || null },
       el('span', { class: 'dot', 'data-state': active, 'aria-label': active }),
       el('span', { class: 'label', text: svc.label || svc.unit || '—' }),
@@ -133,6 +133,18 @@ function fmtUptime(seconds) {
 
 function fmtGB(bytes, digits) {
   return Number.isFinite(bytes) ? (bytes / 1e9).toFixed(digits) : '—';
+}
+
+// v1 format for the service rows: "now" (< 60 s), "12m", "4h", then "Nd" with no cap (most
+// PC services run for weeks; kit's fmt.relTime switches to a date after 7 days).
+function fmtRel(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
 }
 
 function fmtAgo(ms) {
