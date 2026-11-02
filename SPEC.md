@@ -391,6 +391,13 @@ without media work). All inputs validated (400), missing rows 404.
   Must also work with a mouse at desktop sizes (hover shows the label).
 - Empty state: "Nothing to connect yet — add some notes, tasks or posts." when < 2 nodes.
 
+### Added apps (2026-11-02)
+`reels`, `deals`, `people`, `saved`, `voice`, `focus`, `daylog`, `bots`. Each module's header
+comment lists its routes. `reels`, `daylog` and `bots` are read-only views of other PC data, and
+`bots` must never gain a control: the Zora bot trades real money. Shared edit form: `web/form.js`.
+Voice recording lives in the native shell (`ios/JakesData/VoiceRecorder.swift`) because a page on
+plain http cannot reach the microphone; the shell sets `window.JakesData.canRecord`.
+
 ## Desktop version (added 2026-11-02)
 
 Jake also uses the app on the Linux PC itself, opened to the Graph. The desktop version is the

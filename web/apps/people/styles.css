@@ -1,0 +1,7 @@
+.app-people .find { width: 100%; box-sizing: border-box; margin-bottom: 12px; font-size: 16px; }
+.app-people .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.app-people .who { font-size: 17px; }
+.app-people .sub { font-size: 13px; color: var(--muted); }
+.app-people .row { width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: inherit; }
+.app-people .body { padding: 12px 14px; white-space: pre-wrap; font-size: 16px; line-height: 1.4; }
+.app-people .graph { width: 100%; min-height: 44px; margin-top: 16px; }

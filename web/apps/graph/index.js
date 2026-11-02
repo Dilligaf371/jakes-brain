@@ -23,10 +23,14 @@ const TYPES = [
   { type: 'video', label: 'Videos', app: 'jaketube' },
   { type: 'chat', label: 'Chats', app: 'jakegpt' },
   { type: 'habit', label: 'Habits', app: 'habits' },
+  { type: 'deal', label: 'Deals', app: 'deals' },
+  { type: 'person', label: 'People', app: 'people' },
+  { type: 'link', label: 'Saved', app: 'saved' },
+  { type: 'focus', label: 'Focus', app: 'focus' },
   { type: 'day', label: 'Days', app: null, color: '#8e8e93' },
   { type: 'tag', label: 'Tags', app: null, color: '#64d2ff' },
 ];
-const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', day: 'Day', tag: 'Tag' };
+const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', deal: 'Deal', person: 'Person', link: 'Saved link', focus: 'Focus', day: 'Day', tag: 'Tag' };
 // Used only when /apps.json cannot be read (the tile colours from SPEC.md).
 const FALLBACK = { notes: '#ffcc00', tasks: '#5e5ce6', calendar: '#ffffff', jakestagram: '#e1306c', jaketube: '#e62117', jakegpt: '#10a37f', habits: '#ff9f0a', graph: '#bf5af2' };
 const FALLBACK_LABELS = { notes: 'Notes', tasks: 'Tasks', calendar: 'Calendar', jakestagram: 'Jakestagram', jaketube: 'JakeTube', jakegpt: 'JakeGPT', habits: 'Habits' };

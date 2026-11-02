@@ -26,7 +26,15 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 | Habits | daily check-ins, streaks, 7-day strip |
 | Files | read-only browser of PC folders with previews |
 | Weather | Open-Meteo forecast for a chosen city |
-| Graph | Obsidian-style graph of everything above, linked by day, tag and note links |
+| Reels | today's proposed reels, hook ideas and top performers from the reels tracker |
+| Deals | brand deals, deliverables, invoices and what's owed; due dates appear in Calendar |
+| People | contact list; `@handle` in any note or deal links that person in the Graph |
+| Saved | paste a link and the PC stores the page text for searchable read-later |
+| Voice Memos | record in the iPhone shell or add an audio file; Whisper transcribes it into Notes |
+| Focus | countdown timer that logs sessions, with a weekly total |
+| Day Log | searchable timeline of each day from the auto-vlog transcripts |
+| Bots | read-only status of the Zora bot and feed accounts |
+| Graph | Obsidian-style graph of everything above, linked by day, tag, note links and @mentions |
 | Server | the PC at a glance: uptime, load, memory, disk, one row per service |
 | Settings | address in use, deployed build, Reload, per-app settings |
 

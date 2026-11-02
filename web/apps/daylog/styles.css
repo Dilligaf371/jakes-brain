@@ -1,0 +1,10 @@
+.app-daylog .find { width: 100%; box-sizing: border-box; margin-bottom: 12px; font-size: 16px; }
+.app-daylog .row { width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: inherit; }
+.app-daylog .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.app-daylog .name { font-size: 17px; }
+.app-daylog .sub { font-size: 13px; color: var(--muted); }
+.app-daylog .snippet { font-size: 15px; line-height: 1.35; }
+.app-daylog .watch { width: 100%; min-height: 44px; margin-bottom: 12px; }
+.app-daylog .block { padding: 10px 0; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
+.app-daylog .time { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.app-daylog .said { font-size: 16px; line-height: 1.45; overflow-wrap: anywhere; }

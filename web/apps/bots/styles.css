@@ -1,0 +1,10 @@
+.app-bots .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.app-bots .name { font-size: 16px; }
+.app-bots .sub { font-size: 13px; color: var(--muted); }
+.app-bots .note { font-size: 14px; margin: 0 0 8px 2px; }
+.app-bots .up { color: var(--green, #34c759); }
+.app-bots .down { color: var(--red); }
+.app-bots .dot { flex: none; }
+.app-bots .dot.on { background: var(--green, #34c759); }
+.app-bots .dot.warn { background: var(--orange, #ff9f0a); }
+.app-bots .dot.off { background: var(--muted); }

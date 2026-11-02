@@ -1,0 +1,5 @@
+.app-deals .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.app-deals .brand { font-size: 17px; }
+.app-deals .sub { font-size: 13px; color: var(--muted); }
+.app-deals .sub.late { color: var(--red); }
+.app-deals .row { width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: inherit; }

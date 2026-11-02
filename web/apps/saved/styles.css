@@ -1,0 +1,12 @@
+.app-saved .add-form { display: flex; gap: 8px; margin-bottom: 10px; }
+.app-saved .add-form .input { flex: 1; min-width: 0; font-size: 16px; }
+.app-saved .add { min-height: 44px; padding: 0 14px; }
+.app-saved .find { width: 100%; box-sizing: border-box; margin-bottom: 12px; font-size: 16px; }
+.app-saved .row { width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: inherit; }
+.app-saved .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.app-saved .name { font-size: 16px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+.app-saved .read .name { font-weight: 400; color: var(--muted); }
+.app-saved .sub { font-size: 13px; color: var(--muted); }
+.app-saved .reader h2 { font-size: 22px; line-height: 1.25; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.app-saved .open { display: inline-block; min-height: 44px; line-height: 44px; color: var(--accent); text-decoration: none; }
+.app-saved .text { white-space: pre-wrap; font-size: 17px; line-height: 1.5; overflow-wrap: anywhere; }

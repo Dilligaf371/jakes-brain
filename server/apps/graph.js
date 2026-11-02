@@ -206,6 +206,49 @@ export function buildGraph({ db, log }) {
   });
 
   // #tags
+  // Added apps: deals, people, saved links, focus sessions.
+  const peopleByHandle = new Map();
+  from('people', () => {
+    for (const row of db.prepare('SELECT id, name, handle, role, notes FROM people').all()) {
+      const id = `person:${row.id}`;
+      addNode({ id, type: 'person', label: trimLabel(clean(row.name)), app: 'people', route: `#/people/${row.id}`, date: null, meta: { role: row.role } });
+      peopleByHandle.set(String(row.handle).toLowerCase(), id);
+      tagged.push([id, String(row.notes || '')]);
+    }
+  });
+  from('deals', () => {
+    for (const row of db.prepare('SELECT id, brand, status, due_date, deliverables, notes, created_at FROM deals').all()) {
+      const id = `deal:${row.id}`;
+      addNode({ id, type: 'deal', label: trimLabel(clean(row.brand)), app: 'deals', route: `#/deals/${row.id}`, date: row.due_date || localDay(row.created_at), meta: { status: row.status } });
+      linkDay(id, row.due_date || localDay(row.created_at));
+      tagged.push([id, `${row.deliverables}\n${row.notes}`]);
+    }
+  });
+  from('saved_links', () => {
+    for (const row of db.prepare('SELECT id, title, site, created_at FROM saved_links').all()) {
+      const id = `link:${row.id}`;
+      const day = localDay(row.created_at);
+      addNode({ id, type: 'link', label: trimLabel(clean(row.title)), app: 'saved', route: `#/saved/${row.id}`, date: day, meta: { site: row.site } });
+      linkDay(id, day);
+      tagged.push([id, String(row.title)]);
+    }
+  });
+  from('focus_sessions', () => {
+    for (const row of db.prepare('SELECT id, label, minutes, started_at FROM focus_sessions').all()) {
+      const id = `focus:${row.id}`;
+      const day = localDay(row.started_at);
+      addNode({ id, type: 'focus', label: trimLabel(clean(row.label) || `Focus ${Math.round(row.minutes)}m`), app: 'focus', route: '#/focus', date: day, meta: {} });
+      linkDay(id, day);
+      tagged.push([id, String(row.label || '')]);
+    }
+  });
+  for (const [nodeId, text] of tagged) {
+    for (const match of String(text).matchAll(/(^|[^\p{L}\p{N}_@./])@([\p{L}\p{N}_.-]{1,40})/gu)) {
+      const person = peopleByHandle.get(match[2].toLowerCase().replace(/[.-]+$/, ''));
+      if (person) addEdge(nodeId, person, 'mention');
+    }
+  }
+
   for (const [nodeId, text] of tagged) {
     for (const tag of findTags(text)) {
       const id = `tag:${tag}`;
