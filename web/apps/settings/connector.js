@@ -1,21 +1,26 @@
-// Settings → Claude connector: the URL to paste into Claude (Settings → Connectors → Add custom
-// connector), its public address, whether it is running, and Rotate (a new secret cuts off the
-// old URL). Data: /api/connector (server/apps/connector.js), setting connector.publicUrl.
+// Settings → Claude connector: the address to add in Claude, its public address, whether it is
+// running, the password Jake signs in with, what is signed in, and Sign everything out.
+// Data: /api/connector (server/apps/connector.js), setting connector.publicUrl.
 import { api, el, toast, haptic, section, confirmSheet, fmt } from '../../kit.js';
 import { formSheet } from '../../form.js';
 
 export function connectorSection() {
   const status = el('span', { class: 'right', text: '—' });
   const addr = el('span', { class: 'right', text: '—' });
-  const urlBox = el('textarea', { class: 'input mono connector-url', readonly: true, rows: '3', 'aria-label': 'Connector URL' });
-  const copy = el('button', { class: 'button', type: 'button', text: 'Copy URL', 'on:click': () => copyUrl() });
-  const rotate = el('button', { class: 'button connector-rotate', type: 'button', text: 'Make a new URL', 'on:click': () => doRotate() });
+  const pass = el('span', { class: 'right', text: '—' });
+  const urlBox = el('textarea', { class: 'input mono connector-url', readonly: true, rows: '2', 'aria-label': 'Connector address' });
+  const copy = el('button', { class: 'button', type: 'button', text: 'Copy address', 'on:click': () => copyUrl() });
+  const signOut = el('button', { class: 'button connector-signout', type: 'button', text: 'Sign everything out', 'on:click': () => doSignOut() });
   const hint = el('p', { class: 'hint' });
+  const sessions = el('div');
   const card = el('div', { class: 'card' },
     el('div', { class: 'row' }, el('span', { class: 'label', text: 'Status' }), status),
     el('button', { class: 'row tappable', type: 'button', 'on:click': () => editAddress() },
-      el('span', { class: 'label', text: 'Public address' }), addr));
-  const wrap = el('div', { class: 'connector' }, section('Claude connector'), card, hint, urlBox, copy, rotate);
+      el('span', { class: 'label', text: 'Public address' }), addr),
+    el('button', { class: 'row tappable', type: 'button', 'on:click': () => editPassword() },
+      el('span', { class: 'label', text: 'Password' }), pass),
+    sessions);
+  const wrap = el('div', { class: 'connector' }, section('Claude connector'), card, hint, urlBox, copy, signOut);
   let info = null;
 
   function render() {
@@ -25,14 +30,25 @@ export function connectorSection() {
       return;
     }
     wrap.hidden = false;
-    status.textContent = info.listening ? (info.lastCall ? `Used ${fmt.relTime(info.lastCall.at)}${/^\d/.test(fmt.relTime(info.lastCall.at)) ? ' ago' : ''}` : 'Running') : 'Not running';
+    status.textContent = info.listening ? (info.lastCall ? `Used ${usedAgo(info.lastCall.at)}` : 'Running') : 'Not running';
     addr.textContent = info.publicUrl || 'Not set';
     addr.classList.toggle('muted', !info.publicUrl);
+    pass.textContent = info.lockedUntil ? 'Locked' : (info.passwordSet ? 'Change' : 'Set one');
+    pass.classList.toggle('muted', info.passwordSet && !info.lockedUntil);
+    sessions.replaceChildren(...info.signedIn.map((s) => el('div', { class: 'row' },
+      el('span', { class: 'label', text: s.name }),
+      el('span', { class: 'right muted', text: s.lastUsed ? `Signed in, ${usedAgo(s.lastUsed)}` : 'Signed in' }))));
     urlBox.value = info.url || '';
-    urlBox.hidden = copy.hidden = !info.url;
-    hint.textContent = info.url
-      ? 'Paste this into Claude: Settings → Connectors → Add custom connector. Anyone with this URL can read and change your data, so keep it private.'
-      : 'Set the public address of the tunnel (see deploy/connector/README.md) to get the URL for Claude.';
+    urlBox.hidden = copy.hidden = !info.url || !info.passwordSet;
+    signOut.hidden = !info.signedIn.length;
+    if (!info.url) hint.textContent = 'Set the public address of the tunnel (see deploy/connector/README.md) to connect Claude.';
+    else if (!info.passwordSet) hint.textContent = 'Set a password. You type it when Claude asks you to sign in.';
+    else hint.textContent = 'In Claude: Customize → Connectors → Add → Add custom connector. Paste this address, then sign in with your password.';
+  }
+
+  function usedAgo(at) {
+    const when = fmt.relTime(at);
+    return /^\d/.test(when) ? `${when} ago` : when;
   }
 
   async function load() {
@@ -73,20 +89,40 @@ export function connectorSection() {
     }
   }
 
-  async function doRotate() {
+  async function editPassword() {
+    const values = await formSheet({
+      title: info && info.passwordSet ? 'Change password' : 'Set a password',
+      fields: [
+        { key: 'password', label: `New password (at least ${info.passwordMin} characters)`, type: 'password', required: true },
+        { key: 'again', label: 'Type it again', type: 'password', required: true },
+      ],
+    });
+    if (!values || values === 'delete') return;
+    if (values.password !== values.again) return toast("Those don't match", { kind: 'error' });
+    try {
+      info = await api('/api/connector/password', { method: 'PUT', body: { password: values.password } });
+      render();
+      haptic('success');
+      toast('Password saved');
+    } catch (err) {
+      toast(`Couldn't save: ${err.message}`, { kind: 'error' });
+    }
+  }
+
+  async function doSignOut() {
     const ok = await confirmSheet({
-      title: 'Make a new URL?',
-      message: 'The old URL stops working right away. You will need to paste the new one into Claude.',
-      confirmLabel: 'Make new URL',
+      title: 'Sign everything out?',
+      message: 'Claude loses access right away. You will need to sign in again from Claude.',
+      confirmLabel: 'Sign out',
       destructive: true,
     });
     if (!ok) return;
     try {
-      info = await api('/api/connector/rotate', { method: 'POST' });
+      info = await api('/api/connector/sessions', { method: 'DELETE' });
       render();
       haptic('success');
     } catch (err) {
-      toast(`Couldn't rotate: ${err.message}`, { kind: 'error' });
+      toast(`Couldn't sign out: ${err.message}`, { kind: 'error' });
     }
   }
 

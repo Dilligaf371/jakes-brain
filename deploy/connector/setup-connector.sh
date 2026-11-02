@@ -7,7 +7,7 @@
 #
 # Installs the tunnel program in ~/.local/bin on the PC (no sudo), stores the token in
 # ~/.config/jakes-brain/tunnel.env (mode 600), starts jakes-brain-tunnel.service, saves the
-# public address in the app, and prints the URL to paste into Claude. Safe to re-run.
+# public address in the app, and prints the address to add in Claude. Safe to re-run.
 set -euo pipefail
 PC=${JAKESDATA_PC:-pcserver}
 kind=${1:-}; token=${2:-}; host=${3:-}
@@ -62,9 +62,9 @@ url=$(curl -fsS http://127.0.0.1:4800/api/connector | python3 -c 'import json,sy
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"ping"}' "$url" || true)
 echo
-if [ "$code" = 200 ]; then echo "Tunnel works (the public URL answered)."; else echo "Warning: the public URL answered $code; check the tunnel log: journalctl --user -u jakes-brain-tunnel -f"; fi
+if [ "$code" = 401 ]; then echo "Tunnel works (the public address answered and asked for sign-in)."; else echo "Warning: the public address answered $code, expected 401; check the tunnel log: journalctl --user -u jakes-brain-tunnel -f"; fi
 echo
-echo "Paste this into Claude → Settings → Connectors → Add custom connector:"
+echo "Set your password in Jake's Brain → Settings → Claude connector, then add this in Claude"
+echo "(Customize → Connectors → Add → Add custom connector) and sign in:"
 echo "  $url"
-echo "It is also in Jake's Brain → Settings → Claude connector."
 REMOTE

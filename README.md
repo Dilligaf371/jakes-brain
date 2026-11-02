@@ -46,8 +46,8 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 
 Claude (the app, claude.ai, Claude Code) can use Jake's Brain like it uses Notion: log food, check
 today's totals, add tasks, groceries and notes. It is a custom connector served by the PC through a
-tunnel; only the connector is public, behind a secret URL. Setup: `deploy/connector/README.md`.
-The URL is in Settings → Claude connector.
+tunnel; only the connector is public, and it needs a real sign-in with your password, like Notion's.
+Setup: `deploy/connector/README.md`. The address and password are in Settings → Claude connector.
 
 ## Making changes
 

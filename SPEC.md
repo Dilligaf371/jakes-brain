@@ -437,13 +437,19 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
 
 ### connector  (added 2026-11-02 — "Claude should update my app like it updates Notion")
 - `server/apps/connector.js`: a remote MCP server (Streamable HTTP, stateless, JSON responses) on a
-  second listener, 127.0.0.1:4801, answering only `POST /mcp/<secret>` (secret in
-  `DATA/connector/secret`, rotate from Settings). Tools call the app's own API over loopback;
-  add a tool by adding an entry to `TOOLS`. Current tools: food_log/day/history/search/update/
+  second listener, 127.0.0.1:4801, answering `POST /mcp` for a signed-in client and 404 for anything
+  outside the sign-in paths. Tools call the app's own API over loopback; add a tool by adding an
+  entry to `TOOLS`. Current tools: food_log/day/history/search/update/
   delete/goals, tasks_list/add/set_done, grocery_list/add, notes_search/create.
 - `deploy/connector/`: the tunnel (ngrok or Cloudflare) as `jakes-brain-tunnel.service`, and
   `setup-connector.sh` (run from the Mac). Only :4801 is tunnelled; :4800 stays LAN/tailnet-only.
-- Settings → Claude connector shows the status, public address, URL (Copy) and "Make a new URL".
+- `server/apps/_connector_auth.js`: the sign-in, an OAuth 2.1 authorization server (discovery,
+  dynamic client registration, PKCE S256, refresh rotation) with one user: Jake's password, an scrypt
+  hash in `DATA/connector/password`, settable only from the private app. Redirects are limited to
+  Claude's callback and loopback. Tables `connector_clients`, `connector_tokens` (hashes only,
+  migration `connector-1`), so a deploy restart keeps Claude signed in.
+- Settings → Claude connector shows the status, public address, connector address (Copy), the
+  password, what is signed in, and "Sign everything out".
 
 ## Desktop version (added 2026-11-02)
 

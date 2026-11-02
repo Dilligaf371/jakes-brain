@@ -2,10 +2,9 @@
 // Brain the way it does Notion, as a remote MCP server ("custom connector").
 //
 // It is a SECOND listener, separate from the app on :4800. It binds 127.0.0.1 only, so the
-// one way in from outside is the tunnel on this PC (deploy/connector/), and it answers one
-// path: POST /mcp/<secret>. Every other path is a 404. The secret is 32 random bytes kept in
-// DATA/connector/secret (never in the repo); "Rotate" in Settings → Claude connector makes a
-// new one, which instantly cuts off the old URL.
+// one way in from outside is the tunnel on this PC (deploy/connector/). It answers POST /mcp for
+// whoever signed in, plus the sign-in paths in _connector_auth.js; every other path is a 404.
+// Nothing here is reachable without Jake's password, and the address itself holds no secret.
 //
 // Tools call this server's own JSON API over loopback, so they get exactly the same validation
 // as the app. To give Claude a new ability, add an entry to TOOLS below.
@@ -14,14 +13,16 @@
 //                               0 turns the connector off)
 //
 // Routes on the main (LAN-only) server, for the Settings screen:
-//   GET  /api/connector          -> { port, path, publicUrl, url, listening, lastCall }
-//   POST /api/connector/rotate   -> same, with a new secret
+//   GET    /api/connector           -> { port, publicUrl, url, listening, lastCall, passwordSet,
+//                                          passwordMin, lockedUntil, signedIn: [{ name, lastUsed }] }
+//   PUT    /api/connector/password  {password} -> same; changing it signs everything out
+//   DELETE /api/connector/sessions  -> same, with everything signed out
 //   (the public address is the setting `connector.publicUrl`, e.g. https://jake.ngrok-free.app)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { readJsonBody, sendJson, HttpError } from '../http.js';
+import { createAuth, MIGRATIONS } from './_connector_auth.js';
 
 const MAIN_PORT = Number(process.env.JAKESDATA_PORT) || 4800;
 const PORT = process.env.JAKESDATA_CONNECTOR_PORT !== undefined
@@ -30,31 +31,35 @@ const PORT = process.env.JAKESDATA_CONNECTOR_PORT !== undefined
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const BODY_LIMIT = 1024 * 1024;
 const API_TIMEOUT_MS = 20_000;
+const HEADERS_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 const INSTRUCTIONS = `Jake's Brain is Jake's personal app (food log, tasks, groceries, notes), running on his own PC.
 Food log: whenever Jake says he ate or drank something, log it with food_log. Estimate calories and protein/carbs/fat in grams when he doesn't give them, and put how you estimated in notes (e.g. "Chopt published nutrition" or "Estimate: bread ~430 + ham ~120"). meal is breakfast, lunch, dinner or snack. date is Jake's local date (YYYY-MM-DD) and defaults to today on his PC; use yesterday's date when he is catching up on yesterday. Before estimating, food_search for the food: he eats the same things often (e.g. his protein shake, 4 eggs, PB toast) and should get the same numbers each time. Log each item as its own entry. After logging, tell him the day's totals from the reply.`;
 
-let secret = null;
-let secretFile = null;
+let auth = null;
 let listening = false;
 let lastCall = null;
 
 export default {
   id: 'connector',
-  migrations: [],
+  migrations: MIGRATIONS,
   register(r, ctx) {
-    secretFile = path.join(ctx.dataDir, 'connector', 'secret');
-    secret = loadSecret(secretFile);
+    auth = createAuth({ db: ctx.db, settings: ctx.settings, dataDir: ctx.dataDir, log: ctx.log, port: PORT });
+    fs.rmSync(path.join(ctx.dataDir, 'connector', 'secret'), { force: true }); // the old URL secret
 
     const info = () => {
       const publicUrl = String(ctx.settings.get('connector.publicUrl', '') || '').replace(/\/+$/, '');
-      const p = `/mcp/${secret}`;
-      return { port: PORT, path: p, publicUrl, url: publicUrl ? `${publicUrl}${p}` : null, listening, lastCall };
+      return { port: PORT, publicUrl, url: publicUrl ? `${publicUrl}/mcp` : null, listening, lastCall, ...auth.status() };
     };
     r.get('/api/connector', () => info());
-    r.post('/api/connector/rotate', () => {
-      secret = newSecret(secretFile);
-      ctx.log.info('connector secret rotated');
+    r.put('/api/connector/password', async (req) => {
+      await auth.setPassword((await readJsonBody(req)).password);
+      return info();
+    });
+    r.delete('/api/connector/sessions', () => {
+      auth.signOutAll();
+      ctx.log.info('connector: signed everything out');
       return info();
     });
 
@@ -73,47 +78,31 @@ export default {
       listening = false;
       ctx.log.error(`connector cannot listen on 127.0.0.1:${PORT}: ${err.message}`);
     });
+    server.headersTimeout = HEADERS_TIMEOUT_MS;
+    server.requestTimeout = REQUEST_TIMEOUT_MS;
     server.listen(PORT, '127.0.0.1', () => {
       listening = true;
-      ctx.log.info(`connector listening on http://127.0.0.1:${PORT}/mcp/<secret>`);
+      ctx.log.info(`connector listening on http://127.0.0.1:${PORT}/mcp`);
     });
     server.unref();
   },
 };
-
-// ---------------------------------------------------------------- secret
-
-function newSecret(file) {
-  const s = crypto.randomBytes(32).toString('hex');
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(file, `${s}\n`, { mode: 0o600 });
-  return s;
-}
-
-function loadSecret(file) {
-  try {
-    const s = fs.readFileSync(file, 'utf8').trim();
-    if (/^[0-9a-f]{64}$/.test(s)) return s;
-  } catch { /* first run */ }
-  return newSecret(file);
-}
-
-function secretMatches(candidate) {
-  const a = Buffer.from(String(candidate));
-  const b = Buffer.from(secret);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
 
 // ---------------------------------------------------------------- HTTP
 
 async function handle(req, res, ctx) {
   const t0 = performance.now();
   const url = new URL(req.url, 'http://localhost');
-  const m = /^\/mcp\/([^/]+)\/?$/.exec(url.pathname);
-  const ok = m && secretMatches(m[1]);
-  // Never log the secret: every line says /mcp/… only.
-  res.on('close', () => console.log(`[connector] ${req.method} ${ok ? '/mcp/…' : 'other'} ${res.statusCode} ${Math.round(performance.now() - t0)}ms`));
-  if (!ok) return sendJson(res, 404, { error: 'not found' });
+  // The path only: a query string can carry an authorization code.
+  res.on('close', () => console.log(`[connector] ${req.method} ${url.pathname.slice(0, 60)} ${res.statusCode} ${Math.round(performance.now() - t0)}ms`));
+  if (await auth.route(req, res, url)) return;
+  if (url.pathname !== '/mcp') return sendJson(res, 404, { error: 'not found' });
+  if (!auth.verify(req)) {
+    const bad = req.headers.authorization ? ', error="invalid_token"' : '';
+    return sendJson(res, 401, { error: 'sign-in required' }, {
+      'WWW-Authenticate': `Bearer resource_metadata="${auth.resourceMetadataUrl()}"${bad}`,
+    });
+  }
   if (req.method !== 'POST') {
     // Stateless server: no server-to-client SSE stream, no sessions to delete.
     return sendJson(res, 405, { error: 'method not allowed' }, { Allow: 'POST' });

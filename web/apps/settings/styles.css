@@ -14,4 +14,4 @@
 /* Claude connector */
 .app-settings .connector-url { width: 100%; box-sizing: border-box; margin: 8px 0; font-size: 13px; word-break: break-all; }
 .app-settings .connector .button { margin-top: 8px; }
-.app-settings .connector-rotate { color: var(--red); }
+.app-settings .connector-signout { color: var(--red); }

@@ -1,26 +1,28 @@
 # Claude connector
 
 Claude can read and change Jake's Brain the same way it works with Notion: as a **custom
-connector** (a remote MCP server). The server is in `server/apps/connector.js`. These files put
-it on the internet.
+connector** (a remote MCP server) that you sign in to. The server is in
+`server/apps/connector.js`, the sign-in in `server/apps/_connector_auth.js`. These files put it on
+the internet.
 
 ```
 Claude (app / claude.ai / Claude Code)
-   │  https://<public address>/mcp/<secret>
+   │  https://<public address>/mcp, with a token from signing in
    ▼
 tunnel (ngrok or Cloudflare) ── runs on the PC as jakes-brain-tunnel.service
    │
    ▼
-127.0.0.1:4801  connector: answers only POST /mcp/<secret>, 404 for everything else
+127.0.0.1:4801  connector: sign-in pages + POST /mcp, 401 without a token, 404 for the rest
    │  loopback
    ▼
 127.0.0.1:4800  the normal app API (stays LAN + tailnet only)
 ```
 
-The connector URL is the password: 64 random hex characters, stored in
-`~/jakes-data-app-data/connector/secret` on the PC. Anyone who has the URL can read and change
-the data that the tools reach (food, tasks, groceries, notes). If the URL leaks, use
-**Settings → Claude connector → Make a new URL**. The old URL stops working immediately.
+The address holds no secret. Nothing gets in without your password, which you set in
+**Settings → Claude connector**. The password can only be set from the private app, never from
+the public side. Five wrong tries lock sign-in for 15 minutes, doubling up to a day; setting the
+password clears the lock. **Sign everything out** (or changing the password) cuts Claude off
+immediately. Signing in lasts 90 days from Claude's last use.
 
 ## One-time setup (from the Mac)
 
@@ -43,18 +45,21 @@ Pick one tunnel:
   deploy/connector/setup-connector.sh cloudflare <tunnel-token> brain.yourdomain.com
   ```
 
-The script prints the connector URL. The same URL appears in **Jake's Brain → Settings → Claude
-connector**, with a Copy button.
+The script prints the connector address. The same address appears in **Jake's Brain → Settings →
+Claude connector**, with a Copy button. Set your password there.
 
 ## Add it to Claude
 
-- **Claude app / claude.ai:** Settings → Connectors → Add custom connector. Name it
-  `Jake's Brain` and paste the URL (leave the OAuth fields empty). It then works in every chat,
-  on the phone too.
-- **Claude Code:** `claude mcp add --transport http jakes-brain <URL>`
+- **Claude app / claude.ai:** Customize → Connectors → Add → Add custom connector. Name it
+  `Jake's Brain`, paste the address, and sign in with your password when it asks. It then works in
+  every chat, on the phone too.
+- **Claude Code:** `claude mcp add --transport http jakes-brain <address>`, then `/mcp` to sign in.
+
+On the free ngrok plan a browser sees ngrok's own warning page once before the sign-in page: click
+**Visit Site**. Claude's own requests never see it.
 
 Then just talk to it: "log 4 eggs and PB toast for breakfast", "what have I eaten today",
-"set my goal to 2400 calories and 180 g protein", "move my Notion food log into Jake's Brain".
+"set my goal to 2400 calories and 180 g protein".
 
 ## Moving the Notion history over
 
