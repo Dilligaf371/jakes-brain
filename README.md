@@ -1,65 +1,69 @@
 # Jake's Data
 
-Jake's personal iPhone app. The app on the phone is a thin native shell; everything it
-shows comes from a web app + API running on the Linux PC. Edit the files on the PC and
-the app updates itself within about 30 seconds. Nothing goes through the App Store.
+Jake's personal app. On the iPhone it is a thin native shell; on the Linux PC it is a
+chromeless browser window. Both show the same web app served by the PC, so editing the files
+on the PC changes the app everywhere within about 30 seconds. Nothing goes through the App Store.
 
 ```
-iPhone  ──Tailscale (anywhere) or home WiFi──▶  PC :4800  (node server/index.js)
- JakesData.app (SwiftUI + WKWebView)                   ├── web/     the UI (plain HTML/CSS/JS)
-                                                ├── server/  JSON API + SQLite (~/jakes-data-app-data/jakesdata.db)
-                                                └── jakes-data.service (systemd --user, always on)
+iPhone (JakesData.app, WKWebView) ──Tailscale / home WiFi──▶  PC :4800  node server/index.js
+PC desktop window (Brave --app)   ──localhost──────────────▶   ├── web/      launcher + apps (plain HTML/CSS/JS)
+                                                               ├── server/   JSON API + SQLite + media
+                                                               └── jakes-data.service (systemd --user)
 ```
 
-## What's in the app (v2)
+## What's inside
 
-The first screen is a home screen of Jake's own apps (see `SPEC.md` for the full list and
-each app's contract). Everything lives in SQLite on the PC, so anything running there
-(Claude Code, Codex, a cron job) can read or write it.
+The first screen is a home screen: a grid of tiles plus a dock. Each tile is one of Jake's own apps:
 
-- **Server** — the PC at a glance: uptime, load, memory, disk, and one row per service
-  (reels tracker, Pocket 3 recorder, auto-vlog builder, feed accounts, Zora bot, Ollama, Jake's Data).
-- **Tasks** — the quick-capture checklist from v1 (its table was renamed from `notes` to `tasks`).
-- **Settings** — which address the phone is using, what build is deployed, a Reload button,
-  and per-app settings.
-- Notes, Calendar, Jakestagram, JakeTube, JakeGPT, Habits, Files, Weather — each its own app
-  under `web/apps/<id>/` + `server/apps/<id>.js`.
+| app | what it is |
+|---|---|
+| Notes | title + body notes with autosave, search, pin, `#tags` and `[[links]]` |
+| Tasks | checklist (open / done), badge on the tile |
+| Calendar | month grid, day agenda, events |
+| Jakestagram | private Instagram: post photos and videos from the phone, feed + grid, hearts |
+| JakeTube | private YouTube over the PC's videos (daily auto-vlogs, raw Pocket 3, game captures) |
+| JakeGPT | private ChatGPT on the PC's Ollama, streaming, conversations saved |
+| Habits | daily check-ins, streaks, 7-day strip |
+| Files | read-only browser of PC folders with previews |
+| Weather | Open-Meteo forecast for a chosen city |
+| Graph | Obsidian-style graph of everything above, linked by day, tag and note links |
+| Server | the PC at a glance: uptime, load, memory, disk, one row per service |
+| Settings | address in use, deployed build, Reload, per-app settings |
 
 ## Making changes
 
-**From the Mac** (this repo):
+**From the Mac** (this repo, `~/jakes-data-app`):
 
 ```bash
-# edit web/ or server/, then
 deploy/deploy.sh "what changed"
 ```
 
-That commits and pushes to the PC. A hook on the PC restarts `jakes-data.service` only if
-`server/` or `deploy/` changed; `web/` edits are live immediately. The app notices the
-new build within 30 s and reloads itself.
+Commits and pushes to the PC. A hook there restarts `jakes-data.service` only if `server/` or
+`deploy/` changed; `web/` edits are live immediately. The phone and the desktop window reload
+themselves when the build changes.
 
-**On the PC directly** (`ssh pcserver`, repo at `~/jakes-data-app`): edit `web/` and it is live.
-After editing `server/`, run `systemctl --user restart jakes-data`. Commit there and
-`git pull pc main` on the Mac to bring the change back.
+**On the PC directly** (`ssh pcserver`, repo at `~/jakes-data-app`): edit `web/` and it is live;
+after editing `server/` run `systemctl --user restart jakes-data`. Commit there and
+`git pull pc main` on the Mac.
 
-**Native shell** (`ios/`) changes need a rebuild onto the phone — see below. You will
-rarely need this; put features in `web/` + `server/`.
+**Adding an app:** add an entry to `web/apps.json`, create `web/apps/<id>/index.js` (export
+`{ mount(root, ctx), unmount(), route(sub) }`) and `styles.css` (every selector prefixed
+`.app-<id>`), an icon `web/icons/app-<id>.svg`, and, if it needs data, `server/apps/<id>.js`
+(export `{ id, migrations, register(r, ctx) }`). The server picks modules up on restart; the
+launcher picks tiles up on reload. `SPEC.md` has the full contract and `web/apps/tasks/` plus
+`server/apps/tasks.js` are the smallest complete example.
 
-## Putting it on the iPhone
+**Native shell** (`ios/`): rarely needed. Plug the phone in, unlock it, and run
+`deploy/install-on-phone.sh`. Simulator: `deploy/run-sim.sh`.
 
-The phone needs to reach the PC. Install **Tailscale** on the iPhone and sign in with
-the same account as the Mac and PC. (Without Tailscale it works on home WiFi only.)
-
-Plug the iPhone into the Mac (or have it on the same WiFi, previously paired), unlock it, then:
+## Desktop version (on the PC)
 
 ```bash
-deploy/install-on-phone.sh
+deploy/desktop/install-desktop.sh      # once: adds "Jake's Data" to the GNOME app grid
+deploy/desktop/open.sh graph           # opens a window straight to the Graph
 ```
 
-Signed with the paid developer team, so the install stays valid for a year. Re-run
-after changing anything under `ios/`.
-
-Simulator: `deploy/run-sim.sh`.
+The window is Brave in app mode pointed at `http://localhost:4800`, so it is the same app.
 
 ## First-time PC setup
 
@@ -67,20 +71,14 @@ Simulator: `deploy/run-sim.sh`.
 deploy/setup-pc.sh
 ```
 
-Creates `~/jakes-data-app` on the PC as a push-to-deploy clone, installs the `post-update` hook and
-`jakes-data.service`, starts it, and checks `http://100.106.249.89:4800/api/health`.
-
-## Layout and contract
-
-`SPEC.md` is the contract between the three parts (API shapes, file layout, shell
-behaviour). Read it before changing an endpoint. Data never lives in the repo: the
-database is `~/jakes-data-app-data/jakesdata.db` on the PC.
-
-## Addresses
+## Where things live
 
 | | |
 |---|---|
 | PC over Tailscale | http://100.106.249.89:4800 |
 | PC on home WiFi | http://192.168.1.81:4800 |
-| Health | `/api/health` · Version `/api/version` · Status `/api/status` · Apps `/api/apps` |
-| Core data | Settings `/api/settings` · Tasks `/api/tasks` (badge `/api/tasks/badge`) · each app under `/api/<id>/…` |
+| Database | `~/jakes-data-app-data/jakesdata.db` on the PC (never in the repo) |
+| Uploads | `~/jakes-data-app-data/media/<app>/` |
+| Thumbnails (regenerable) | `~/jakes-data-app-data/cache/<app>/` |
+| Core API | `/api/health` · `/api/version` · `/api/status` · `/api/settings` · `/api/apps` |
+| App APIs | `/api/<app>/…` (see SPEC.md) |
