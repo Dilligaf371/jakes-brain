@@ -7,6 +7,6 @@
     { "unit": "feed-accounts.service",    "label": "Feed accounts" },
     { "unit": "zora-bot.service",         "label": "Zora bot" },
     { "unit": "ollama.service",           "label": "Ollama" },
-    { "unit": "hq.service",               "label": "HQ (this app)" }
+    { "unit": "jakes-data.service",               "label": "Jake's Data (this app)" }
   ]
 }

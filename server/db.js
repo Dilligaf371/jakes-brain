@@ -1,5 +1,5 @@
 // SQLite via node:sqlite (DatabaseSync): open, migrations, and the notes repository.
-// Zero npm dependencies. The DB file lives in HQ_DATA/hq.db, never in the repo.
+// Zero npm dependencies. The DB file lives in JAKESDATA_DATA/jakesdata.db, never in the repo.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -34,11 +34,11 @@ const MIGRATIONS = [
 
 export function openDb(dataDir) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const file = path.join(dataDir, 'hq.db');
+  const file = path.join(dataDir, 'jakesdata.db');
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL');
   // Short: this server is the only writer, and the wait happens synchronously on the event
-  // loop. A foreign lock (someone in `sqlite3 hq.db`) surfaces as SQLITE_BUSY -> 503 instead.
+  // loop. A foreign lock (someone in `sqlite3 jakesdata.db`) surfaces as SQLITE_BUSY -> 503 instead.
   db.exec('PRAGMA busy_timeout = 250');
   db.exec('PRAGMA synchronous = NORMAL');
   migrate(db);

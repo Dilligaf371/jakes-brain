@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct HQApp: App {
+struct JakesDataApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var activity = SceneActivity()
 

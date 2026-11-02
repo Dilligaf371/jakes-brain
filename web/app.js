@@ -1,4 +1,4 @@
-// HQ web app. Plain ES module, no build step. Every API call is relative (/api/...):
+// Jake's Data web app. Plain ES module, no build step. Every API call is relative (/api/...):
 // the page is always served by the same server, so there is no base URL to configure.
 
 const POLL_MS = 30_000;          // /api/version + Home status refresh
@@ -7,7 +7,7 @@ const BACKOFF_MAX_MS = 30_000;
 const FETCH_TIMEOUT_MS = 8_000;  // a PC that is asleep / off the tailnet blackholes SYNs for ~60 s otherwise
 const TOAST_MS = 2_600;
 const ARM_MS = 3_000;            // how long the "Delete" confirm stays armed
-const UI_KEY = 'hq.ui';          // sessionStorage: tab + unsent note draft across a reload
+const UI_KEY = 'jakesdata.ui';          // sessionStorage: tab + unsent note draft across a reload
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const $ = (id) => document.getElementById(id);
@@ -55,11 +55,11 @@ const state = {
 
 // ---------------------------------------------------------------- native bridge
 
-// window.HQ = { native: true, version: "1.0 (1)" } is injected by the iOS shell.
+// window.JakesData = { native: true, version: "1.0 (1)" } is injected by the iOS shell.
 // On the Mac it is undefined, so everything here is feature-detected.
 function shellVersion() {
-  const hq = window.HQ;
-  return hq && hq.version ? String(hq.version) : 'web';
+  const jd = window.JakesData;
+  return jd && jd.version ? String(jd.version) : 'web';
 }
 
 function haptic(style) {
@@ -118,7 +118,7 @@ const isAbort = (err) => Boolean(err) && err.name === 'AbortError';
 
 // Every call is bounded by FETCH_TIMEOUT_MS. Without it a hung request (PC asleep, peer
 // offline) held the inflight flags for the browser's ~60 s default, so tab switches and
-// hq:foreground did nothing and the banner never showed.
+// jakesdata:foreground did nothing and the banner never showed.
 async function api(path, { method = 'GET', body } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -562,7 +562,7 @@ setInterval(() => {
   if (!document.hidden && state.tab === 'home') renderUpdated();
 }, 1000);
 
-window.addEventListener('hq:foreground', refreshAll);
+window.addEventListener('jakesdata:foreground', refreshAll);
 window.addEventListener('online', refreshAll);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refreshAll();

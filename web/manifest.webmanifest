@@ -1,6 +1,6 @@
 {
-  "name": "HQ",
-  "short_name": "HQ",
+  "name": "Jake's Data",
+  "short_name": "Jake's Data",
   "description": "Jake's PC at a glance: machine status, services, and quick notes.",
   "start_url": "/",
   "scope": "/",

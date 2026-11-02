@@ -181,7 +181,7 @@ export function createApi({ notes, config, webDir, repoDir, startedAt }) {
 
     if (p === '/api/health') {
       if (method !== 'GET' && method !== 'HEAD') return methodNotAllowed(res, 'GET');
-      return sendJson(res, 200, { ok: true, name: 'hq', host: os.hostname(), time: new Date().toISOString() });
+      return sendJson(res, 200, { ok: true, name: 'jakes-data', host: os.hostname(), time: new Date().toISOString() });
     }
 
     if (p === '/api/version') {

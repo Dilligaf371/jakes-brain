@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mac -> PC. Commits whatever changed and pushes to the PC; the PC's post-update hook
-# restarts hq.service when server/ or deploy/ changed (web/ changes are live instantly).
+# restarts jakes-data.service when server/ or deploy/ changed (web/ changes are live instantly).
 # Usage: deploy/deploy.sh "what changed"
 set -euo pipefail
 cd "$(dirname "$0")/.."

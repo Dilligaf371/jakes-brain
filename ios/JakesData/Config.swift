@@ -12,11 +12,11 @@ enum Config {
     static let healthTimeout: TimeInterval = 2.5
 
     /// UserDefaults key. A string URL that, when set, is tried before everything else.
-    static let baseURLOverrideKey = "hq.baseURL"
+    static let baseURLOverrideKey = "jakesdata.baseURL"
     /// UserDefaults key. The last base URL whose health check passed.
-    static let lastGoodURLKey = "hq.lastGoodURL"
+    static let lastGoodURLKey = "jakesdata.lastGoodURL"
 
-    /// The `hq.baseURL` override, if set and it parses as an http(s) URL.
+    /// The `jakesdata.baseURL` override, if set and it parses as an http(s) URL.
     static func overrideURL(in defaults: UserDefaults = .standard) -> URL? {
         url(forKey: baseURLOverrideKey, in: defaults)
     }

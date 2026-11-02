@@ -11,7 +11,7 @@ final class WebShellController {
     /// Tells the page the app is back in the foreground (it refetches status + version).
     func postForeground() {
         guard isPageLoaded, let webView else { return }
-        webView.evaluateJavaScript("window.dispatchEvent(new Event('hq:foreground'))") { _, _ in }
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('jakesdata:foreground'))") { _, _ in }
     }
 }
 
@@ -76,7 +76,7 @@ struct WebShell: UIViewRepresentable {
         coordinator.parent.controller.webView = nil
     }
 
-    /// `window.HQ = { native: true, version: "1.0 (1)" }` from the bundle's version keys.
+    /// `window.JakesData = { native: true, version: "1.0 (1)" }` from the bundle's version keys.
     static func bridgeScript() -> String {
         let info = Bundle.main.infoDictionary ?? [:]
         let short = info["CFBundleShortVersionString"] as? String ?? "0"
@@ -84,7 +84,7 @@ struct WebShell: UIViewRepresentable {
         let payload: [String: Any] = ["native": true, "version": "\(short) (\(build))"]
         let json = (try? JSONSerialization.data(withJSONObject: payload))
             .flatMap { String(data: $0, encoding: .utf8) } ?? #"{"native":true}"#
-        return "window.HQ = \(json);"
+        return "window.JakesData = \(json);"
     }
 
     // MARK: - Coordinator

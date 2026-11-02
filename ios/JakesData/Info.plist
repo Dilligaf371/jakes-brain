@@ -26,6 +26,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>HQ connects to your PC on the home Wi-Fi.</string>
+	<string>Jake's Data connects to your PC on the home Wi-Fi.</string>
 </dict>
 </plist>

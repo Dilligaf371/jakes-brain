@@ -1,14 +1,14 @@
 [Unit]
-Description=HQ — Jake's personal iPhone app backend (port 4800)
+Description=Jake's Data — Jake's personal iPhone app backend (port 4800)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=%h/hq
+WorkingDirectory=%h/jakes-data-app
 Environment=PATH=/home/jacob-beauchamp/.nvm/versions/node/v22.23.3/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
-Environment=HQ_PORT=4800
-Environment=HQ_DATA=%h/hq-data
+Environment=JAKESDATA_PORT=4800
+Environment=JAKESDATA_DATA=%h/jakes-data-app-data
 ExecStart=/home/jacob-beauchamp/.nvm/versions/node/v22.23.3/bin/node server/index.js
 Restart=always
 RestartSec=3

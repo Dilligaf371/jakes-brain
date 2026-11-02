@@ -1,8 +1,8 @@
-// HQ server entry. Serves the web app from HQ_WEB (default <repo>/web) and the JSON API
+// Jake's Data server entry. Serves the web app from JAKESDATA_WEB (default <repo>/web) and the JSON API
 // under /api. Node 22, zero npm dependencies.
 //
-//   HQ_PORT  (4800)            HQ_BIND (0.0.0.0)
-//   HQ_DATA  ($HOME/hq-data)   HQ_WEB  (<repo>/web)
+//   JAKESDATA_PORT  (4800)            JAKESDATA_BIND (0.0.0.0)
+//   JAKESDATA_DATA  ($HOME/jakes-data-app-data)   JAKESDATA_WEB  (<repo>/web)
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -16,10 +16,10 @@ import { createApi, sendJson, isDbBusy } from './api.js';
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const repoDir = path.resolve(serverDir, '..');
 
-const PORT = Number(process.env.HQ_PORT) || 4800;
-const BIND = process.env.HQ_BIND || '0.0.0.0';
-const DATA_DIR = path.resolve(process.env.HQ_DATA || path.join(os.homedir(), 'hq-data'));
-const WEB_DIR = path.resolve(process.env.HQ_WEB || path.join(repoDir, 'web'));
+const PORT = Number(process.env.JAKESDATA_PORT) || 4800;
+const BIND = process.env.JAKESDATA_BIND || '0.0.0.0';
+const DATA_DIR = path.resolve(process.env.JAKESDATA_DATA || path.join(os.homedir(), 'jakes-data-app-data'));
+const WEB_DIR = path.resolve(process.env.JAKESDATA_WEB || path.join(repoDir, 'web'));
 // Symlink-resolved web dir: a stray symlink inside web/ must not let the static server
 // read files outside it.
 const REAL_WEB_DIR = realpathOr(WEB_DIR);
@@ -56,7 +56,7 @@ const handleApi = createApi({ notes: store.notes, config, webDir: WEB_DIR, repoD
 
 const server = http.createServer((req, res) => {
   handle(req, res).catch((err) => {
-    console.error(`[hq] unhandled error for ${req.method} ${req.url}:`, err);
+    console.error(`[jakes-data] unhandled error for ${req.method} ${req.url}:`, err);
     if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
     else res.destroy();
   });
@@ -64,16 +64,16 @@ const server = http.createServer((req, res) => {
 server.keepAliveTimeout = 65_000;
 
 server.on('error', (err) => {
-  console.error(`[hq] cannot listen on ${BIND}:${PORT}: ${err.message}`);
+  console.error(`[jakes-data] cannot listen on ${BIND}:${PORT}: ${err.message}`);
   process.exit(1);
 });
 
 server.listen(PORT, BIND, () => {
-  console.log(`[hq] listening on http://${BIND}:${PORT}  web=${WEB_DIR}  data=${DATA_DIR}  node=${process.version}`);
+  console.log(`[jakes-data] listening on http://${BIND}:${PORT}  web=${WEB_DIR}  data=${DATA_DIR}  node=${process.version}`);
 });
 
 function shutdown(signal) {
-  console.log(`[hq] ${signal} received, shutting down`);
+  console.log(`[jakes-data] ${signal} received, shutting down`);
   server.close(() => {
     store.close();
     process.exit(0);
@@ -92,7 +92,7 @@ function loadConfig(file) {
     if (!Array.isArray(parsed.services)) parsed.services = [];
     return parsed;
   } catch (err) {
-    console.error(`[hq] could not read ${file}: ${err.message}; showing no services`);
+    console.error(`[jakes-data] could not read ${file}: ${err.message}; showing no services`);
     return { services: [] };
   }
 }
@@ -104,9 +104,9 @@ function openStore(dataDir) {
     return openDb(dataDir);
   } catch (err) {
     const what = err && err.code === 'ERR_SQLITE_ERROR'
-      ? `cannot open database ${path.join(dataDir, 'hq.db')}`
+      ? `cannot open database ${path.join(dataDir, 'jakesdata.db')}`
       : `cannot open data dir ${dataDir}`;
-    console.error(`[hq] ${what}: ${err && err.message ? err.message : err}`);
+    console.error(`[jakes-data] ${what}: ${err && err.message ? err.message : err}`);
     process.exit(1);
   }
 }
@@ -144,11 +144,11 @@ async function handle(req, res) {
     }
   } catch (err) {
     if (isDbBusy(err)) {
-      console.error(`[hq] ${req.method} ${req.url}: database is busy (${err.message})`);
+      console.error(`[jakes-data] ${req.method} ${req.url}: database is busy (${err.message})`);
       if (!res.headersSent) return sendJson(res, 503, { error: 'database is busy, try again' }, { 'Retry-After': '1' });
       return res.destroy();
     }
-    console.error(`[hq] ${req.method} ${req.url} failed:`, err);
+    console.error(`[jakes-data] ${req.method} ${req.url} failed:`, err);
     if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
     else res.destroy();
   }

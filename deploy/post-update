@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Installed on the PC at ~/hq/.git/hooks/post-update by deploy/setup-pc.sh.
+# Installed on the PC at ~/jakes-data-app/.git/hooks/post-update by deploy/setup-pc.sh.
 # Runs after `git push pc` has updated the PC working tree (receive.denyCurrentBranch=updateInstead).
-# Restarts hq.service only when server/ or deploy/ changed; web/ edits are live without a restart.
+# Restarts jakes-data.service only when server/ or deploy/ changed; web/ edits are live without a restart.
 unset GIT_DIR GIT_WORK_TREE
 cd "$(dirname "$0")/../.." || exit 1
 prev=$(git rev-parse -q --verify 'HEAD@{1}' 2>/dev/null || true)
 if [ -n "$prev" ]; then changed=$(git diff --name-only "$prev" HEAD); else changed="server/ deploy/"; fi
 if printf '%s\n' "$changed" | grep -qE '^(server|deploy)/'; then
-  if ! cmp -s deploy/hq.service ~/.config/systemd/user/hq.service; then
-    cp deploy/hq.service ~/.config/systemd/user/hq.service && systemctl --user daemon-reload
+  if ! cmp -s deploy/jakes-data.service ~/.config/systemd/user/jakes-data.service; then
+    cp deploy/jakes-data.service ~/.config/systemd/user/jakes-data.service && systemctl --user daemon-reload
   fi
-  systemctl --user restart hq.service && echo "hq: server/deploy changed -> hq.service restarted"
+  systemctl --user restart jakes-data.service && echo "jakes-data: server/deploy changed -> jakes-data.service restarted"
 else
-  echo "hq: web-only change -> live, no restart"
+  echo "jakes-data: web-only change -> live, no restart"
 fi

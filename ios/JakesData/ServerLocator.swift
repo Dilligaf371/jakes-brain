@@ -1,9 +1,9 @@
 import Foundation
 
-/// Finds a reachable HQ server.
+/// Finds a reachable Jake's Data server.
 ///
-/// Preference order: the `hq.baseURL` override (if set), then the last URL that
-/// answered (`hq.lastGoodURL`), then the built-in candidates. Every URL is probed at
+/// Preference order: the `jakesdata.baseURL` override (if set), then the last URL that
+/// answered (`jakesdata.lastGoodURL`), then the built-in candidates. Every URL is probed at
 /// once so a dead preferred URL never delays a live one by a full timeout: a
 /// preferred URL that answers healthy wins outright, and when a less-preferred URL
 /// answers first the preferred ones get `preferredGrace` to catch up before it is
