@@ -9,6 +9,7 @@
     "graph",
     "calendar",
     "tasks",
+    "grocery",
     "reminders",
     "habits",
     "weather",
@@ -111,6 +112,11 @@
       "label": "Reminders",
       "color": "#c2410c",
       "badge": "/api/reminders/badge"
+    },
+    "grocery": {
+      "label": "Groceries",
+      "color": "#65a30d",
+      "badge": "/api/grocery/badge"
     }
   }
 }

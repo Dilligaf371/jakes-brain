@@ -19,6 +19,7 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 |---|---|
 | Notes | title + body notes with autosave, search, pin, `#tags` and `[[links]]` |
 | Tasks | checklist (open / done), badge on the tile |
+| Groceries | shopping list grouped by aisle, check items into the cart, "Buy again" chips, badge on the tile |
 | Calendar | month grid, day agenda, events |
 | Jakestagram | private Instagram: post photos and videos from the phone, feed + grid, hearts |
 | JakeTube | private YouTube over the PC's videos (daily auto-vlogs, raw Pocket 3, game captures) |

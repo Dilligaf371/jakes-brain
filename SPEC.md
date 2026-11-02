@@ -398,6 +398,17 @@ comment lists its routes. `reels`, `daylog` and `bots` are read-only views of ot
 Voice recording lives in the native shell (`ios/JakesData/VoiceRecorder.swift`) because a page on
 plain http cannot reach the microphone; the shell sets `window.JakesData.canRecord`.
 
+### grocery  (added 2026-11-02)
+- Tile: id `grocery`, label "Groceries", colour #65a30d, glyph = shopping cart, badge = items still needed.
+- Tables `grocery_items(id, name, qty TEXT, aisle TEXT, got INTEGER, created_at, updated_at)` and
+  `grocery_history(key = lower-cased name PRIMARY KEY, name, qty, aisle, times, last_added)` (migration `grocery-1`).
+- Aisles (fixed, store order): Produce, Bakery, Meat & Seafood, Dairy & Eggs, Pantry, Frozen, Snacks, Drinks, Household, Other.
+  A POST without `aisle` uses the aisle that name had last time, else a keyword guess, else Other.
+- Routes are listed in the header of `server/apps/grocery.js`.
+- UI: add field; "Buy again" chips (past items not on the list); needed items grouped by aisle;
+  tap the circle = in the cart, tap the name = edit sheet (item, quantity, aisle, delete);
+  "In the cart" section; nav bar "Clear" empties the cart via confirmSheet.
+
 ## Desktop version (added 2026-11-02)
 
 Jake also uses the app on the Linux PC itself, opened to the Graph. The desktop version is the
