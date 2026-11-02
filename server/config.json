@@ -7,6 +7,21 @@
     { "unit": "feed-accounts.service",    "label": "Feed accounts" },
     { "unit": "zora-bot.service",         "label": "Zora bot" },
     { "unit": "ollama.service",           "label": "Ollama" },
-    { "unit": "jakes-data.service",               "label": "Jake's Data (this app)" }
-  ]
+    { "unit": "jakes-data.service",       "label": "Jake's Data (this app)" }
+  ],
+  "tools": { "ffmpeg": "/home/jacob-beauchamp/pocket3-vlog/bin/ffmpeg", "ffprobe": "/home/jacob-beauchamp/pocket3-vlog/bin/ffprobe" },
+  "fileRoots": [
+    { "name": "Videos",     "path": "~/Videos" },
+    { "name": "Pictures",   "path": "~/Pictures" },
+    { "name": "Downloads",  "path": "~/Downloads" },
+    { "name": "Boost data", "path": "~/boost_data" }
+  ],
+  "videoChannels": [
+    { "id": "vlogs", "name": "Daily Vlogs",   "paths": ["~/Videos/pocket3-vlog/vlogs"], "recursive": false },
+    { "id": "raw",   "name": "Pocket 3 raw",  "paths": ["~/Videos/pocket3-vlog"],       "recursive": false },
+    { "id": "games", "name": "Game captures", "paths": ["~/Videos/Fortnite", "~/Videos/Call of Duty  Modern Warfare 2019", "~/Videos/Captures"], "recursive": true },
+    { "id": "boost", "name": "Boost",         "paths": ["~/Videos/boost"], "recursive": true }
+  ],
+  "gpt": { "defaultModel": "qwen3.5:9b", "system": "You are JakeGPT, Jake's private assistant running on his own PC. Be direct and concise." },
+  "weather": { "units": "fahrenheit" }
 }

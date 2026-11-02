@@ -349,6 +349,74 @@ without media work). All inputs validated (400), missing rows 404.
   condition, feels like, wind; an hourly strip (horizontal scroll); a 7-day list with min/max
   bars. Nav right: "Change" (search again). Units toggle °F/°C writes `weather.units`.
 
+
+### graph  (added 2026-11-02 — "an Obsidian-like graph of all my data")
+- Tile: id `graph`, label "Graph", colour #bf5af2, glyph = three dots joined by lines. The graph
+  builder also writes `web/icons/app-graph.svg`.
+- `GET /api/graph` → `{ nodes: [...], edges: [...], generated_at }`, cached 30 s. Built READ-ONLY
+  from the other apps' tables (they are all defined in this SPEC; tolerate a missing table —
+  an app not built yet — by skipping it):
+  - item nodes: `note` (notes: label = title or first line), `task` (tasks: text, done),
+    `event` (calendar_events: title, date), `post` (gram_posts: caption or "Photo"/"Video",
+    thumb), `video` (tube_videos: readable name per the JakeTube rule, channel), `chat`
+    (gpt_conversations: title), `habit` (habits: name). Node shape:
+    `{ id: '<type>:<rowid>', type, label, app: '<app id>', route: '#/notes/42', date: 'YYYY-MM-DD'|null, meta: {...small} }`.
+  - hub nodes: `day` (`id: 'day:2026-11-02'`, label "Nov 2", route `#/calendar/2026-11`) for every
+    date that has ≥ 1 item; `tag` (`id: 'tag:focus'`, label "#focus") for every `#tag` found in
+    note title/body, task text, event title/notes, post caption, chat title.
+  - edges `{ source, target, kind }`: `day` item↔day (notes/tasks/posts/chats by created_at local
+    date, events by date, videos by mtime date, habits ↔ each day they were checked in the last
+    60 days); `tag` item↔tag; `link` note→note for `[[Title]]` (case-insensitive match on note
+    title); `app`-less (no app hub nodes — colour carries the app).
+  - Caps: at most 2000 nodes; if exceeded drop the oldest day clusters first and set
+    `truncated: true`.
+- UI (`web/apps/graph/`): a full-bleed `<canvas>` under the nav bar, Obsidian-like: dark canvas
+  (#161616) in dark mode, #f2f2f7 in light; nodes = filled circles sized by degree (4–14 px),
+  coloured by app (tile colours from `web/apps.json`; day = #8e8e93, tag = #64d2ff); edges thin
+  low-alpha lines. Own force simulation (no library, no CDN): repulsion (grid-bucketed
+  approximation is fine), spring edges, centre gravity, cooling; ~300 ticks then idle; re-heat
+  on drag. Interactions: drag empty space = pan, pinch / wheel = zoom (0.2–4), drag a node,
+  tap/click a node = select: highlight its neighbours (dim the rest), show a bottom card (label,
+  type, date, app) with an **Open** button → `ctx.nav.go(node.route)`. Labels: shown for
+  selected + neighbours always, and for all nodes when zoom ≥ 1.6 (day/tag labels at ≥ 1.0).
+  Nav bar right: a filter button → sheet with type toggles (notes, tasks, events, posts,
+  videos, chats, habits, days, tags; persisted in kit.store `graph.filters`) and a search field
+  that highlights matching labels. Sub-route `#/graph/<nodeId>` selects and centres that node.
+  Devices: must stay smooth on an iPhone with ~800 nodes (cap simulation work per frame,
+  use devicePixelRatio, `touch-action: none` on the canvas, no scrolling of the page).
+  Must also work with a mouse at desktop sizes (hover shows the label).
+- Empty state: "Nothing to connect yet — add some notes, tasks or posts." when < 2 nodes.
+
+## Desktop version (added 2026-11-02)
+
+Jake also uses the app on the Linux PC itself, opened to the Graph. The desktop version is the
+same web app in a chromeless browser window (Chrome/Chromium `--app=` mode), plus a GNOME
+launcher entry, so it behaves like an installed app.
+
+- **Core CSS for wide screens** (the `desktop` builder owns these edits in `web/styles.css`
+  and, if needed, `web/launcher.js`; nothing else in core):
+  `@media (min-width: 700px)`: the launcher is centred with max-width 760px, 6-column grid,
+  76px tiles with 16px radius, labels 12px, dock centred with the same tile size, hover state
+  (tile scales 1.04, cursor pointer); the `#app` layer centres a column of max-width 980px with
+  the page background on both sides, and the nav bar spans that column — EXCEPT an app whose
+  root has the class `full-bleed` (graph and the JakeTube watch page may add it), which gets the
+  whole window. Keyboard: Escape = back/home. No layout change below 700px.
+- `deploy/desktop/` (the `desktop` builder owns it):
+  - `jakes-data.desktop` — `Name=Jake's Data`, `Exec=<home>/jakes-data-app/deploy/desktop/open.sh %u`,
+    `Icon=jakes-data`, `StartupWMClass=JakesData`, `Categories=Utility;`.
+  - `open.sh [route]` — opens `http://localhost:4800/#/<route or empty>` in an app window:
+    `BROWSER --app=URL --class=JakesData --user-data-dir=$HOME/.config/jakes-data-app-window --window-size=1280,860`
+    where BROWSER is the first of `google-chrome`, `google-chrome-stable`, `chromium`,
+    `chromium-browser`, `brave-browser` found on PATH (also look in /snap/bin and flatpak
+    exports); if none, fall back to `firefox --kiosk`-less plain `firefox --new-window URL` and
+    print a note. If a JakesData window is already open, just focus it (wmctrl if present,
+    else open anyway).
+  - `install-desktop.sh` — run ON THE PC: copies the .desktop file (with `<home>` expanded) to
+    `~/.local/share/applications/`, the icon (`web/icons/icon-512.png`) to
+    `~/.local/share/icons/hicolor/512x512/apps/jakes-data.png`, runs `update-desktop-database`
+    and `gtk-update-icon-cache` when present, and prints how to pin it to the dash.
+  - Everything must be plain bash, no sudo.
+
 ### server / settings
 - `server` = the v1 Home view moved into `web/apps/server/` (no server changes).
 - `settings` = the v1 About view moved into `web/apps/settings/` + rows for: Weather city

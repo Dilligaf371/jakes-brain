@@ -1,0 +1,106 @@
+/* Tasks app (the v1 Notes checklist). */
+.app-tasks .task-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.app-tasks .task-input { flex: 1 1 auto; }
+
+.app-tasks .task-add {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  color: var(--accent);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.app-tasks .task-add:disabled { opacity: 0.45; cursor: default; }
+
+.app-tasks .task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-tasks .task:last-child { border-bottom: 0; }
+
+.app-tasks .task .check {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--grey);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: #fff;
+}
+
+.app-tasks .task .check::before {
+  /* enlarge the tap target without changing the drawn circle */
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+.app-tasks .task .check .icon {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+
+.app-tasks .task .check[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.app-tasks .task .check[aria-checked="true"] .icon { display: block; }
+
+.app-tasks .task .text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.app-tasks .tasks-done .task .text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.app-tasks .task .del {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: -14px; /* the card's horizontal padding: the drawn × stays put, the target is 44x44 */
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-tasks .task .del[data-armed="true"] {
+  color: var(--red);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+
+.app-tasks .task.pending { opacity: 0.55; }
+
+.app-tasks .task .check, .app-tasks .task .del, .app-tasks .task-add {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .app-tasks .task-add:hover, .app-tasks .task .del:hover { opacity: 0.75; }
+}
