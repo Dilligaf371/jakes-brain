@@ -106,6 +106,25 @@
 
 .app-graph .gfit:active { opacity: 0.6; }
 
+.app-graph .gbtns {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-graph .gfit[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Full screen: the graph takes the whole monitor, so the nav bar goes and Filter moves down. */
+.app-graph .gfsonly { display: none; }
+.app-graph:fullscreen .gfsonly { display: block; }
+.app-graph:fullscreen > .navbar { display: none; }
+.app-graph:fullscreen .ginfo { top: 12px; }
+.app-graph:fullscreen .gsheet-panel { max-height: calc(100% - 24px); }
+
 /* empty states over the canvas */
 .app-graph .gempty {
   position: absolute;

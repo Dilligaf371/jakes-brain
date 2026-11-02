@@ -7,6 +7,11 @@
 // hover (mouse) shows the label, double-tap / double-click empty space = fit.
 // Nav bar right: filter + search sheet (type toggles persisted in kit.store 'graph.filters').
 // Sub-route #/graph/<nodeId> selects and centres that node.
+// 3D (the 3D button): the same simulation gains a z axis and the canvas draws a perspective
+// projection with depth fog. Drag empty space = turn the graph (a flick keeps it turning),
+// shift-drag = pan, Spin = turn on its own, pausing while the mouse is on a node.
+// Full fills the monitor the window is on (hidden where the browser has no fullscreen API,
+// which is the iPhone, where the app already fills the screen).
 import * as kit from '../../kit.js';
 
 const { api, el, fmt, toast, haptic, navbar, navButton, icon, store, nav, holdReload, releaseReload, debounce, emptyState } = kit;
@@ -14,6 +19,8 @@ const { api, el, fmt, toast, haptic, navbar, navButton, icon, store, nav, holdRe
 const FILTERS_KEY = 'graph.filters';
 const HOLD_SEARCH = 'graph:search';
 const HOLD_DRAG = 'graph:drag';
+const HOLD_FULL = 'graph:fullscreen';
+const MODE_KEY = 'graph.mode';
 
 const TYPES = [
   { type: 'note', label: 'Notes', app: 'notes' },
@@ -49,6 +56,7 @@ const MAX_GRID = 40;                                   // cells per axis cap (th
 const LINK_DIST = 64;                                  // one rest length, like Obsidian
 const LABEL_COLLIDE_MAX = 400;                         // beyond this many on-screen labels, skip the overlap pass
 const GRAVITY = 0.02;
+const GRAVITY_3D = 0.32;                                // measured: at 0.02 the islands drift so far that the core ends up tiny
 const TUNE_KEY = 'graph.tune';
 const TUNE_DEFAULT = { textFade: 1, nodeSize: 1, linkWidth: 1, center: 1, repel: 1, link: 1, distance: 1, colors: false, orphans: true };
 const ACCENT_MIX = 0.22;                               // per-frame easing of the hover highlight
@@ -60,6 +68,11 @@ const MAX_TICKS_PER_FRAME = 3;
 const TAP_SLOP = 6;
 const DOUBLE_TAP_MS = 320;
 const HIT_PAD = 9;                                     // screen px around a node that still hits it
+const SPIN_RATE = 0.25;                                 // radians per second
+const ORBIT_SPEED = 0.006;                             // radians per dragged pixel
+const INERTIA_KEEP = 0.94;                             // per 60 Hz frame, after a flick
+const CAMERA = 2.5;                                    // camera distance, in graph radii
+const FOG = 0.72;                                      // how much the back of the graph fades
 const LABEL_FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
 
 let S = null;       // the whole app state while mounted
@@ -68,6 +81,7 @@ let listeners = [];
 export default {
   mount(root, ctx) {
     root.classList.add('full-bleed');
+    const mode = loadMode();
     S = {
       root,
       ctx,
@@ -89,6 +103,19 @@ export default {
       selAdj: null,
       hover: null,
       view: { x: 0, y: 0, k: 1 },
+      d3: mode.d3,
+      spin: mode.spin,
+      depth: mode.d3 ? 1 : 0,
+      rot: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      spinV: { yaw: 0, pitch: 0 },
+      radius: 1,
+      cam: 1,
+      order: [],
+      lastFrame: 0,
+      labelBusy: false,
+      fullscreen: false,
+      fullExitAt: 0,
+      refitUntil: 0,
       autoFit: true,
       tween: null,
       alpha: 0,
@@ -117,6 +144,8 @@ export default {
     S.pal = palette(S.dark.matches);
     buildUi(root);
     listen(S.dark, 'change', onSchemeChange);
+    listen(document, 'fullscreenchange', onFullscreenChange);
+    listen(document, 'keydown', onKeyDown);
     listen(window, 'jakesdata:online', () => load());
     listen(window, 'jakesdata:foreground', () => load());
     listen(document, 'visibilitychange', () => {
@@ -134,7 +163,8 @@ export default {
       setData: (data) => { if (S) { S.byId = new Map(); setData(data); } },
       nodeScreen: (id) => {
         const n = S && S.byId.get(id);
-        return n ? worldToScreen(n.x, n.y) : null;
+        if (!n) return null;
+        return is3d() ? { x: n.sx, y: n.sy } : worldToScreen(n.x, n.y);
       },
       visibleNodeIds: () => (S ? S.visNodes.map((n) => n.id) : []),
     };
@@ -147,6 +177,8 @@ export default {
     listeners = [];
     releaseReload(HOLD_SEARCH);
     releaseReload(HOLD_DRAG);
+    releaseReload(HOLD_FULL);
+    if (S && document.fullscreenElement === S.root) document.exitFullscreen().catch(() => {});
     if (S && S.ro) S.ro.disconnect();
     if (window.__jdGraph) delete window.__jdGraph;
     S = null;
@@ -186,7 +218,14 @@ function buildUi(root) {
     'on:click': () => setQuery(''),
   }, el('span', { class: 'gpill-text' }), icon('close', { size: 16, strokeWidth: 2.4 }));
   const fitBtn = el('button', { class: 'gfit', type: 'button', text: 'Fit', 'on:click': () => fitView(true) });
-  const info = el('div', { class: 'ginfo' }, el('div', { class: 'ginfo-left' }, stats, searchPill), fitBtn);
+  const modeBtn = el('button', { class: 'gfit', type: 'button', text: '3D', 'aria-label': 'Show in 3D', 'aria-pressed': 'false', 'on:click': () => set3d(!S.d3) });
+  const spinBtn = el('button', { class: 'gfit', type: 'button', text: 'Spin', 'aria-label': 'Spin the graph', 'aria-pressed': 'false', 'on:click': toggleSpin });
+  const fullBtn = el('button', { class: 'gfit', type: 'button', text: 'Full', 'aria-label': 'Fill the screen', 'on:click': toggleFullscreen });
+  fullBtn.hidden = !document.fullscreenEnabled;
+  // The nav bar is gone in fullscreen, so the filter button moves down here.
+  const fullFilterBtn = el('button', { class: 'gfit gfsonly', type: 'button', text: 'Filter', 'on:click': openSheet });
+  const btns = el('div', { class: 'gbtns' }, fullFilterBtn, modeBtn, spinBtn, fitBtn, fullBtn);
+  const info = el('div', { class: 'ginfo' }, el('div', { class: 'ginfo-left' }, stats, searchPill), btns);
 
   const empty = emptyState('Nothing to connect yet — add some notes, tasks or posts.');
   empty.classList.add('gempty');
@@ -211,8 +250,9 @@ function buildUi(root) {
   const stage = el('div', { class: 'app-content gstage' }, canvas, info, empty, noMatch, card, sheet.host);
   root.append(bar, stage);
 
-  S.els = { bar, canvas, stage, info, stats, searchPill, fitBtn, empty, noMatch, card, cardDot, cardThumb, cardTitle, cardMeta, openBtn, centreBtn, ...sheet };
+  S.els = { bar, canvas, stage, info, stats, searchPill, fitBtn, modeBtn, spinBtn, fullBtn, empty, noMatch, card, cardDot, cardThumb, cardTitle, cardMeta, openBtn, centreBtn, ...sheet };
   S.g = canvas.getContext('2d', { alpha: false });
+  syncMode();
 
   // Size: the stage fills the window; the canvas follows it (devicePixelRatio aware).
   S.ro = new ResizeObserver(() => resize());
@@ -399,6 +439,8 @@ function syncInfo() {
   empty.hidden = !(S.loaded && total < 2);
   noMatch.hidden = !(S.loaded && total >= 2 && n === 0);
   fitBtn.hidden = n < 2;
+  S.els.modeBtn.hidden = n < 2;
+  syncMode();
   S.els.info.hidden = S.loaded && total < 2;
 }
 
@@ -466,10 +508,21 @@ function setData(data) {
       meta: raw.meta && typeof raw.meta === 'object' ? raw.meta : {},
       x: old ? old.x : 0,
       y: old ? old.y : 0,
+      z: old ? old.z : 0,
       vx: 0,
       vy: 0,
+      vz: 0,
       fx: null,
       fy: null,
+      fz: null,
+      sx: 0,
+      sy: 0,
+      ss: 1,
+      rx: 0,
+      ry: 0,
+      rz: 0,
+      la: 0,
+      want: 0,
       placed: Boolean(old),
       deg: 0,
       r: 4,
@@ -522,6 +575,7 @@ function setData(data) {
         const a = Math.random() * Math.PI * 2;
         n.x = buddy.x + Math.cos(a) * 20;
         n.y = buddy.y + Math.sin(a) * 20;
+        n.z = buddy.z + (Math.random() - 0.5) * 20;
         n.placed = true;
         return;
       }
@@ -535,6 +589,7 @@ function setData(data) {
   S.nodes = nodes;
   S.edges = edges;
   sizeNodes();
+  if (S.d3) seedDepth();
   S.byId = byId;
   S.loaded = true;
   if (S.sel) S.sel = byId.get(S.sel.id) || null;
@@ -684,6 +739,8 @@ function stopLoop() {
 function frame(now) {
   if (!S) return;
   S.raf = 0;
+  const dt = Math.min(0.05, (now - S.lastFrame) / 1000 || 0);
+  S.lastFrame = now;
   const t0 = performance.now();
   let ticks = 0;
   while ((S.alpha > ALPHA_MIN || S.alphaTarget > 0) && ticks < MAX_TICKS_PER_FRAME && performance.now() - t0 < TICK_BUDGET_MS) {
@@ -708,7 +765,9 @@ function frame(now) {
     S.dirty = true;
   }
   if (focus) S.fadeNode = focus;
-  if (S.dirty) {
+  stepDepth();
+  stepSpin(dt);
+  if (S.dirty || S.labelBusy) {
     draw();
     S.dirty = false;
   }
@@ -716,7 +775,8 @@ function frame(now) {
   S.stats.drawMs = t2 - t1;
   S.stats.frameMs = t2 - t0;
   S.stats.frames += 1;
-  if (S.alpha > ALPHA_MIN || S.alphaTarget > 0 || S.tween || S.fadeBusy) S.raf = requestAnimationFrame(frame);
+  const turning = S.d3 && (S.spin || S.spinV.yaw || S.spinV.pitch);
+  if (S.alpha > ALPHA_MIN || S.alphaTarget > 0 || S.tween || S.fadeBusy || S.labelBusy || turning || S.depth !== (S.d3 ? 1 : 0)) S.raf = requestAnimationFrame(frame);
 }
 
 function focusNode() {
@@ -727,45 +787,78 @@ function focusNode() {
 function tick() {
   const alpha = S.alpha;
   const vis = S.visNodes;
-  repel(vis, alpha);
+  const d3 = S.d3;
+  if (d3) repel3(vis, alpha);
+  else repel(vis, alpha);
   // Springs (d3 link force: strength 1/min(deg), bias toward the lighter end).
   for (const e of S.visEdges) {
     const a = e.a;
     const b = e.b;
     let dx = b.x + b.vx - a.x - a.vx;
     let dy = b.y + b.vy - a.y - a.vy;
-    if (dx === 0 && dy === 0) {
+    let dz = d3 ? b.z + b.vz - a.z - a.vz : 0;
+    if (dx === 0 && dy === 0 && dz === 0) {
       dx = (Math.random() - 0.5) * 1e-3;
       dy = (Math.random() - 0.5) * 1e-3;
     }
-    const l = Math.sqrt(dx * dx + dy * dy);
+    const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const strength = S.tune.link / Math.min(a.deg || 1, b.deg || 1);
     const f = ((l - e.dist) / l) * alpha * strength;
     dx *= f;
     dy *= f;
+    dz *= f;
     const bias = a.deg / (a.deg + b.deg || 1);
     b.vx -= dx * bias;
     b.vy -= dy * bias;
+    b.vz -= dz * bias;
     a.vx += dx * (1 - bias);
     a.vy += dy * (1 - bias);
+    a.vz += dz * (1 - bias);
   }
   // Centre gravity + integration.
   for (const n of vis) {
     if (n.fx != null) {
       n.x = n.fx;
       n.y = n.fy;
+      if (d3) n.z = n.fz;
       n.vx = 0;
       n.vy = 0;
+      n.vz = 0;
       continue;
     }
     // Unlinked nodes get a stronger pull so they orbit close instead of a distant ring.
-    const pull = GRAVITY * S.tune.center * alpha * (n.deg ? 1 : 3);
+    const pull = (d3 ? GRAVITY_3D : GRAVITY) * S.tune.center * alpha * (n.deg ? 1 : 3);
     n.vx -= n.x * pull;
     n.vy -= n.y * pull;
     n.vx *= VELOCITY_KEEP;
     n.vy *= VELOCITY_KEEP;
     n.x += n.vx;
     n.y += n.vy;
+    if (d3) {
+      n.vz -= n.z * pull;
+      n.vz *= VELOCITY_KEEP;
+      n.z += n.vz;
+    }
+  }
+  // Keep the middle of the graph on the origin, the point it turns around. Not during a
+  // drag: the held node stays put, so shifting everything else would slide the graph.
+  if (d3 && !S.alphaTarget && vis.length) {
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (const n of vis) {
+      cx += n.x;
+      cy += n.y;
+      cz += n.z;
+    }
+    cx /= vis.length;
+    cy /= vis.length;
+    cz /= vis.length;
+    for (const n of vis) {
+      n.x -= cx;
+      n.y -= cy;
+      n.z -= cz;
+    }
   }
   S.alpha += (S.alphaTarget - S.alpha) * ALPHA_DECAY;
 }
@@ -885,6 +978,36 @@ function repel(vis, alpha) {
   }
 }
 
+// Repulsion in 3D: every pair, exactly. The graph has at most 2000 nodes and the simulation
+// sleeps once it cools, so this stays simpler than a 3D version of the grid above.
+function repel3(vis, alpha) {
+  const K = REPEL * S.tune.repel * alpha;
+  const n = vis.length;
+  for (let i = 0; i < n; i++) {
+    const a = vis[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = vis[j];
+      let dx = a.x - b.x;
+      let dy = a.y - b.y;
+      let dz = a.z - b.z;
+      let d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < 1) {
+        dx = (Math.random() - 0.5) || 0.5;
+        dy = (Math.random() - 0.5) || 0.5;
+        dz = (Math.random() - 0.5) || 0.5;
+        d2 = dx * dx + dy * dy + dz * dz;
+      }
+      const f = K / d2;
+      a.vx += dx * f * b.m;
+      a.vy += dy * f * b.m;
+      a.vz += dz * f * b.m;
+      b.vx -= dx * f * a.m;
+      b.vy -= dy * f * a.m;
+      b.vz -= dz * f * a.m;
+    }
+  }
+}
+
 function pairCells(vis, order, start, c2, s, e, K) {
   const s2 = start[c2];
   const e2 = start[c2 + 1];
@@ -923,6 +1046,7 @@ function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   S.navH = navHeight();
   if (w === S.w && h === S.h && dpr === S.dpr) return;
+  const refit = S.autoFit || performance.now() < S.refitUntil;
   S.w = w;
   S.h = h;
   S.dpr = dpr;
@@ -930,12 +1054,13 @@ function resize() {
   S.els.canvas.height = Math.round(h * dpr);
   S.els.canvas.style.width = `${w}px`;
   S.els.canvas.style.height = `${h}px`;
-  if (S.autoFit && S.visNodes.length) fitView(false);
+  if (refit && S.visNodes.length) fitView(false);
   S.dirty = true;
   startLoop();
 }
 
 function navHeight() {
+  if (S.fullscreen) return 0;
   return S.els.bar.offsetHeight || 44;
 }
 
@@ -987,6 +1112,12 @@ function fitTarget() {
   const bottom = (S.sel ? 150 : 24) + safeBottom();
   const availW = Math.max(50, S.w - pad * 2);
   const availH = Math.max(50, S.h - top - bottom);
+  if (is3d()) {
+    // Fit the whole sphere, so nothing leaves the screen while it turns.
+    projectAll();
+    const k = clampZoom(Math.min(availW, availH) / (2.2 * S.radius));
+    return { k: Math.min(FIT_MAX_ZOOM, k), x: S.w / 2, y: top + availH / 2 };
+  }
   const w = Math.max(40, maxX - minX + 20);
   const h = Math.max(40, maxY - minY + 20);
   const k = Math.min(FIT_MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(availW / w, availH / h)));
@@ -1023,7 +1154,14 @@ function centreOn(node, animate) {
   const k = clampZoom(Math.max(S.view.k, 1.6));
   const top = S.navH;
   const bottom = 150 + safeBottom();
-  const target = { k, x: S.w / 2 - node.x * k, y: top + (S.h - top - bottom) / 2 - node.y * k };
+  let nx = node.x;
+  let ny = node.y;
+  if (is3d()) {
+    projectAll();
+    nx = node.rx * node.ss;
+    ny = node.ry * node.ss;
+  }
+  const target = { k, x: S.w / 2 - nx * k, y: top + (S.h - top - bottom) / 2 - ny * k };
   S.autoFit = false;
   if (animate && !S.reduced) tweenTo(target);
   else {
@@ -1057,9 +1195,240 @@ function stepTween(now) {
   if (p >= 1) S.tween = null;
 }
 
+// ---------------------------------------------------------------- 3D and fullscreen
+
+function loadMode() {
+  const saved = store.get(MODE_KEY, null);
+  return { d3: Boolean(saved && saved.d3), spin: Boolean(saved && saved.spin) };
+}
+
+function saveMode() {
+  store.set(MODE_KEY, { d3: S.d3, spin: S.spin });
+}
+
+function syncMode() {
+  const { modeBtn, spinBtn, canvas } = S.els;
+  modeBtn.setAttribute('aria-pressed', String(S.d3));
+  spinBtn.setAttribute('aria-pressed', String(S.spin));
+  spinBtn.hidden = !S.d3 || S.visNodes.length < 2;
+  canvas.classList.toggle('g3d', S.d3);
+}
+
+// True while the 3D drawing path is in charge, including the flatten back to 2D.
+function is3d() {
+  return S.d3 || S.depth > 0;
+}
+
+function seedDepth() {
+  let r2 = 1;
+  for (const n of S.nodes) r2 = Math.max(r2, n.x * n.x + n.y * n.y);
+  const spread = Math.sqrt(r2);
+  for (const n of S.nodes) if (!n.z) n.z = (Math.random() - 0.5) * spread;
+}
+
+function set3d(on) {
+  if (!S || S.d3 === on) return;
+  haptic('light');
+  const view = S.view;
+  if (on) {
+    // Move the middle of the graph to the origin; the view shifts to match, so nothing jumps.
+    const vis = S.visNodes;
+    let cx = 0;
+    let cy = 0;
+    for (const n of vis) {
+      cx += n.x;
+      cy += n.y;
+    }
+    cx /= vis.length || 1;
+    cy /= vis.length || 1;
+    for (const n of S.nodes) {
+      n.x -= cx;
+      n.y -= cy;
+    }
+    view.x += cx * view.k;
+    view.y += cy * view.k;
+    seedDepth();
+    // A small push, because a graph seen head-on looks the same as the flat one.
+    S.spinV = { yaw: S.reduced ? 0 : 0.02, pitch: S.reduced ? 0 : 0.008 };
+  } else {
+    // Turn the coordinates themselves by the current rotation, so the graph flattens from
+    // exactly the angle it was left at.
+    const m = S.rot;
+    for (const n of S.nodes) {
+      const x = n.x;
+      const y = n.y;
+      const z = n.z * S.depth;
+      n.x = m[0] * x + m[1] * y + m[2] * z;
+      n.y = m[3] * x + m[4] * y + m[5] * z;
+      n.z = m[6] * x + m[7] * y + m[8] * z;
+      n.vx = 0;
+      n.vy = 0;
+      n.vz = 0;
+    }
+    S.rot = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    S.depth = 1;
+    S.spinV = { yaw: 0, pitch: 0 };
+  }
+  S.d3 = on;
+  S.tween = null;
+  S.autoFit = true;
+  saveMode();
+  syncMode();
+  startSim(on ? 1 : 0.6);
+  S.dirty = true;
+  startLoop();
+}
+
+function toggleSpin() {
+  haptic('light');
+  S.spin = !S.spin;
+  saveMode();
+  syncMode();
+  startLoop();
+}
+
+function stepDepth() {
+  const target = S.d3 ? 1 : 0;
+  if (S.depth === target) return;
+  S.depth += (target - S.depth) * (S.reduced ? 1 : 0.12);
+  if (Math.abs(target - S.depth) < 0.004) S.depth = target;
+  S.dirty = true;
+}
+
+function stepSpin(dt) {
+  if (!S.d3) return;
+  // A finger or mouse on the graph, or the mouse resting on a node so it can be read.
+  if (S.pointers.size || (S.hover && S.hover.vis)) return;
+  const v = S.spinV;
+  const frames = dt * 60;
+  const yaw = (S.spin ? SPIN_RATE * dt : 0) + v.yaw * frames;
+  const pitch = v.pitch * frames;
+  const keep = Math.pow(INERTIA_KEEP, frames);
+  v.yaw = Math.abs(v.yaw * keep) < 1e-4 ? 0 : v.yaw * keep;
+  v.pitch = Math.abs(v.pitch * keep) < 1e-4 ? 0 : v.pitch * keep;
+  if (yaw || pitch) {
+    rotate(yaw, pitch);
+    S.dirty = true;
+  }
+}
+
+// Turns the graph around the screen's vertical (yaw) and horizontal (pitch) axes.
+function rotate(yaw, pitch) {
+  const m = S.rot;
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  for (let j = 0; j < 3; j++) {
+    const x = m[j];
+    const y = m[3 + j];
+    const z = m[6 + j];
+    const z1 = cy * z - sy * x;
+    m[j] = cy * x + sy * z;
+    m[3 + j] = cp * y - sp * z1;
+    m[6 + j] = sp * y + cp * z1;
+  }
+  // Rounding adds up over hours of spinning and would shear the picture; square it up again.
+  const a = Math.hypot(m[0], m[1], m[2]);
+  m[0] /= a;
+  m[1] /= a;
+  m[2] /= a;
+  const d = m[0] * m[3] + m[1] * m[4] + m[2] * m[5];
+  m[3] -= d * m[0];
+  m[4] -= d * m[1];
+  m[5] -= d * m[2];
+  const b = Math.hypot(m[3], m[4], m[5]);
+  m[3] /= b;
+  m[4] /= b;
+  m[5] /= b;
+  m[6] = m[1] * m[5] - m[2] * m[4];
+  m[7] = m[2] * m[3] - m[0] * m[5];
+  m[8] = m[0] * m[4] - m[1] * m[3];
+}
+
+// Screen position of every visible node. With depth 0 and no rotation this is the 2D view.
+function projectAll() {
+  const m = S.rot;
+  const depth = S.depth;
+  const { x: vx, y: vy, k } = S.view;
+  const vis = S.visNodes;
+  let r2 = 1;
+  for (const n of vis) {
+    const z = n.z * depth;
+    const d = n.x * n.x + n.y * n.y + z * z;
+    if (d > r2) r2 = d;
+  }
+  S.radius = Math.sqrt(r2);
+  const cam = S.cam = S.radius * CAMERA;
+  for (const n of vis) {
+    const z = n.z * depth;
+    const rz = m[6] * n.x + m[7] * n.y + m[8] * z;
+    const s = cam / (cam + rz);
+    n.rx = m[0] * n.x + m[1] * n.y + m[2] * z;
+    n.ry = m[3] * n.x + m[4] * n.y + m[5] * z;
+    n.rz = rz;
+    n.ss = s;
+    n.sx = vx + k * s * n.rx;
+    n.sy = vy + k * s * n.ry;
+  }
+}
+
+// The world point under a screen point, at camera depth rz.
+function unproject(sx, sy, rz) {
+  const s = S.cam / (S.cam + rz);
+  const rx = (sx - S.view.x) / (S.view.k * s);
+  const ry = (sy - S.view.y) / (S.view.k * s);
+  const m = S.rot;
+  return {
+    x: m[0] * rx + m[3] * ry + m[6] * rz,
+    y: m[1] * rx + m[4] * ry + m[7] * rz,
+    z: m[2] * rx + m[5] * ry + m[8] * rz,
+  };
+}
+
+function toggleFullscreen() {
+  haptic('light');
+  const change = document.fullscreenElement ? document.exitFullscreen() : S.root.requestFullscreen();
+  Promise.resolve(change).catch(() => toast("Full screen isn't available here"));
+}
+
+function onFullscreenChange() {
+  if (!S) return;
+  const on = document.fullscreenElement === S.root;
+  if (!on && S.fullscreen) S.fullExitAt = performance.now();
+  S.fullscreen = on;
+  S.els.fullBtn.textContent = on ? 'Exit' : 'Full';
+  S.els.fullBtn.setAttribute('aria-label', on ? 'Leave full screen' : 'Fill the screen');
+  // A new build must not reload the page and drop the graph out of full screen.
+  if (on) holdReload(HOLD_FULL);
+  else releaseReload(HOLD_FULL);
+  // The window keeps changing size for a moment (macOS animates this), so keep refitting.
+  S.refitUntil = performance.now() + 1500;
+  resize();
+  fitView(false);
+  startLoop();
+}
+
+// Escape only leaves full screen here. The launcher would otherwise also go back a screen,
+// and the browser can deliver the key just after it has already left full screen.
+function onKeyDown(e) {
+  if (e.key !== 'Escape') return;
+  if (document.fullscreenElement === S.root) {
+    e.preventDefault();
+    document.exitFullscreen().catch(() => {});
+  } else if (performance.now() - S.fullExitAt < 400) {
+    e.preventDefault();
+  }
+}
+
 // ---------------------------------------------------------------- drawing
 
 function draw() {
+  if (is3d()) {
+    draw3d();
+    return;
+  }
+  S.labelBusy = false;
   const g = S.g;
   const { w, h, dpr, pal, view } = S;
   const k = view.k;
@@ -1174,8 +1543,114 @@ function draw() {
     g.stroke();
   }
 
-  // Labels in screen space (constant size): selected + neighbours + hover + matches always;
-  // everything at zoom >= 1.6 (day/tag hubs at >= 1.0), fading in over a short band.
+  drawLabels({ sel, hover, fnode, adj, searching, dimming, dimLevel, onScreen });
+}
+
+// Screen-space node drawing: fog fades the far side, near nodes paint over far ones.
+function draw3d() {
+  const g = S.g;
+  const { w, h, dpr, pal, view } = S;
+  const k = view.k;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = pal.bg;
+  g.fillRect(0, 0, w, h);
+  S.labelBusy = false;
+  if (!S.visNodes.length) return;
+  projectAll();
+
+  const sel = S.sel;
+  const hover = S.hover;
+  const fnode = S.fade > 0 ? S.fadeNode : null;
+  if (fnode && !fnode.adjSet) fnode.adjSet = new Set(fnode.adj);
+  const adj = fnode ? fnode.adjSet : null;
+  const searching = Boolean(S.query);
+  const dimming = Boolean(fnode) || searching;
+  const dimLevel = fnode ? S.fade : 1;
+  const isLit = (n) => (fnode ? n === fnode || adj.has(n.idx) : n.match);
+  const onScreen = (n) => n.sx >= -40 && n.sx <= w + 40 && n.sy >= -40 && n.sy <= h + 40;
+  const R = S.radius;
+  const far = (rz) => Math.min(1, Math.max(0, (rz + R) / (2 * R)));
+
+  // Edges: four depth bands, far first, so a stroke per band gives the fog.
+  const linkW = S.tune.linkWidth;
+  const bands = [[], [], [], []];
+  let lit = null;
+  for (const e of S.visEdges) {
+    const a = e.a;
+    const b = e.b;
+    if (!onScreen(a) && !onScreen(b)) continue;
+    if (dimming && (fnode ? (a === fnode || b === fnode) : (a.match && b.match))) {
+      if (!lit) lit = [];
+      lit.push(e);
+      continue;
+    }
+    bands[Math.min(3, Math.floor(far((a.rz + b.rz) / 2) * 4))].push(e);
+  }
+  g.lineCap = 'round';
+  g.lineWidth = Math.max(0.9, 0.5 * k) * linkW;
+  g.strokeStyle = pal.edge;
+  const edgeDim = dimming ? 1 - 0.8 * dimLevel : 1;
+  for (let i = 3; i >= 0; i--) {
+    g.globalAlpha = edgeDim * (1 - FOG * S.depth * ((i + 0.5) / 4));
+    g.beginPath();
+    for (const e of bands[i]) {
+      g.moveTo(e.a.sx, e.a.sy);
+      g.lineTo(e.b.sx, e.b.sy);
+    }
+    g.stroke();
+  }
+  if (lit) {
+    g.strokeStyle = pal.accent;
+    g.globalAlpha = Math.max(0.15, dimLevel);
+    g.lineWidth = Math.max(1.4, 0.8 * k) * linkW;
+    g.beginPath();
+    for (const e of lit) {
+      g.moveTo(e.a.sx, e.a.sy);
+      g.lineTo(e.b.sx, e.b.sy);
+    }
+    g.stroke();
+  }
+
+  const order = S.order;
+  order.length = 0;
+  for (const n of S.visNodes) if (onScreen(n)) order.push(n);
+  order.sort((a, b) => b.rz - a.rz);
+  const TAU = Math.PI * 2;
+  for (const n of order) {
+    let alpha = 1 - FOG * S.depth * far(n.rz);
+    if (dimming && n !== fnode && !isLit(n)) alpha *= 1 - (1 - pal.nodeDim) * dimLevel;
+    g.globalAlpha = alpha;
+    g.fillStyle = n === fnode ? pal.accent : n.color;
+    g.beginPath();
+    g.arc(n.sx, n.sy, Math.max(1.6, n.r * k * n.ss), 0, TAU);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+
+  if (searching) {
+    g.strokeStyle = pal.match;
+    g.lineWidth = 2;
+    g.beginPath();
+    for (const n of order) {
+      if (!n.match) continue;
+      const r = Math.max(1.6, n.r * k * n.ss) + 3;
+      g.moveTo(n.sx + r, n.sy);
+      g.arc(n.sx, n.sy, r, 0, TAU);
+    }
+    g.stroke();
+  }
+
+  drawLabels({ sel, hover, fnode, adj, searching, dimming, dimLevel, onScreen, far });
+}
+
+// Labels in screen space (constant size): selected + neighbours + hover + matches always;
+// everything at zoom >= 1.6 (day/tag hubs at >= 1.0), fading in over a short band.
+// In 3D they ease in and out, because turning the graph changes which ones fit every frame.
+function drawLabels({ sel, hover, fnode, adj, searching, dimming, dimLevel, onScreen, far }) {
+  const g = S.g;
+  const { w, h, dpr, pal, view } = S;
+  const k = view.k;
+  const flat = !far;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.textAlign = 'center';
   g.textBaseline = 'top';
@@ -1199,23 +1674,36 @@ function draw() {
       a = labelAlpha(n);
       if (a <= 0) continue;
       if (dimming) a *= 1 - 0.8 * dimLevel;
+      if (!flat) a *= 1 - FOG * S.depth * far(n.rz);
       pri = n.deg >= 6 ? 3 : 4;
     }
-    const p = worldToScreen(n.x, n.y);
-    if (p.x < -200 || p.x > w + 200 || p.y < -40 || p.y > h + 40) continue;
-    wanted.push({ n, a, pri, x: p.x, y: p.y + Math.max(minR, n.r) * k + 4 });
+    const sx = flat ? n.x * k + view.x : n.sx;
+    const sy = flat ? n.y * k + view.y : n.sy;
+    const scale = flat ? k : k * n.ss;
+    if (sx < -200 || sx > w + 200 || sy < -40 || sy > h + 40) continue;
+    wanted.push({ n, a, pri, x: sx, y: sy + Math.max(1.6, n.r * scale) + 4 });
   }
   wanted.sort((u, v) => u.pri - v.pri || v.n.deg - u.n.deg);
   const placed = [];
   const collide = wanted.length <= LABEL_COLLIDE_MAX;
   let font = '';
-  for (const item of wanted) {
-    const n = item.n;
+  const setFont = (n) => {
     const wantFont = `${n.deg >= 12 ? 13 : 11}px ${LABEL_FONT}`;
     if (wantFont !== font) {
       font = wantFont;
       g.font = font;
     }
+  };
+  const paint = (n, x, y, alpha) => {
+    setFont(n);
+    g.globalAlpha = alpha;
+    g.strokeText(n.text, x, y);
+    g.fillStyle = n === sel || n === hover ? pal.labelHi : pal.label;
+    g.fillText(n.text, x, y);
+  };
+  for (const item of wanted) {
+    const n = item.n;
+    setFont(n);
     if (n.lw == null) n.lw = g.measureText(n.text || (n.text = n.label.length > 36 ? `${n.label.slice(0, 35)}…` : n.label)).width;
     const x0 = item.x - n.lw / 2 - 3;
     const x1 = item.x + n.lw / 2 + 3;
@@ -1229,10 +1717,21 @@ function draw() {
       if (hit && item.pri > 0) continue;
       placed.push([x0, y0, x1, y1]);
     }
-    g.globalAlpha = item.a;
-    g.strokeText(n.text, item.x, item.y);
-    g.fillStyle = n === sel || n === hover ? pal.labelHi : pal.label;
-    g.fillText(n.text, item.x, item.y);
+    if (flat) paint(n, item.x, item.y, item.a);
+    else n.want = item.a;
+  }
+  if (!flat) {
+    let busy = false;
+    const ease = S.reduced ? 1 : 0.16;
+    for (const n of S.visNodes) {
+      n.la += (n.want - n.la) * ease;
+      if (Math.abs(n.want - n.la) < 0.01) n.la = n.want;
+      else busy = true;
+      n.want = 0;
+      if (n.la < 0.02 || !n.text) continue;
+      paint(n, n.sx, n.sy + Math.max(1.6, n.r * k * n.ss) + 4, n.la);
+    }
+    S.labelBusy = busy;
   }
   g.globalAlpha = 1;
 }
@@ -1242,18 +1741,21 @@ function draw() {
 function nodeAt(cx, cy) {
   const p = clientToCanvas(cx, cy);
   const k = S.view.k;
+  const flat = !is3d();
   let best = null;
   let bestD = Infinity;
   for (const n of S.visNodes) {
-    const sx = n.x * k + S.view.x;
-    const sy = n.y * k + S.view.y;
+    const sx = flat ? n.x * k + S.view.x : n.sx;
+    const sy = flat ? n.y * k + S.view.y : n.sy;
     const dx = sx - p.x;
     const dy = sy - p.y;
     const d = Math.sqrt(dx * dx + dy * dy);
-    const hit = Math.max(n.r * k, 6) + HIT_PAD;
-    if (d <= hit && d < bestD) {
+    const hit = Math.max(n.r * (flat ? k : k * n.ss), 6) + HIT_PAD;
+    // In 3D nodes overlap on screen: when two are about as close, the nearer one wins.
+    const score = flat ? d : d + (n.rz / S.radius) * 4;
+    if (d <= hit && score < bestD) {
       best = n;
-      bestD = d;
+      bestD = score;
     }
   }
   return best;
@@ -1268,7 +1770,9 @@ function onPointerDown(e) {
   S.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
   if (S.pointers.size === 1) {
     const node = nodeAt(e.clientX, e.clientY);
-    S.gesture = { kind: node ? 'node' : 'pan', node, moved: false, startX: e.clientX, startY: e.clientY, view0: { ...S.view }, pointerType: e.pointerType };
+    S.spinV = { yaw: 0, pitch: 0 };
+    const empty = S.d3 && !e.shiftKey ? 'orbit' : 'pan';
+    S.gesture = { kind: node ? 'node' : empty, node, moved: false, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, lastMove: 0, view0: { ...S.view }, pointerType: e.pointerType };
     if (!node) canvas.classList.add('panning');
   } else if (S.pointers.size === 2) {
     if (S.gesture && S.gesture.kind === 'node' && S.gesture.moved) endDrag(S.gesture.node);
@@ -1317,11 +1821,25 @@ function onPointerMove(e) {
   }
   if (g.kind === 'node') {
     const c = clientToCanvas(e.clientX, e.clientY);
-    const wpt = screenToWorld(c.x, c.y);
+    const wpt = S.d3 ? unproject(c.x, c.y, g.node.rz) : screenToWorld(c.x, c.y);
     g.node.fx = wpt.x;
     g.node.fy = wpt.y;
     g.node.x = wpt.x;
     g.node.y = wpt.y;
+    if (S.d3) {
+      g.node.fz = wpt.z;
+      g.node.z = wpt.z;
+    }
+    S.dirty = true;
+    startLoop();
+  } else if (g.kind === 'orbit') {
+    const yaw = -(e.clientX - g.lastX) * ORBIT_SPEED;
+    const pitch = (e.clientY - g.lastY) * ORBIT_SPEED;
+    g.lastX = e.clientX;
+    g.lastY = e.clientY;
+    g.lastMove = e.timeStamp;
+    rotate(yaw, pitch);
+    S.spinV = { yaw: yaw * 0.5 + S.spinV.yaw * 0.5, pitch: pitch * 0.5 + S.spinV.pitch * 0.5 };
     S.dirty = true;
     startLoop();
   } else {
@@ -1341,7 +1859,7 @@ function onPointerUp(e) {
   if (g.kind === 'pinch') {
     if (S.pointers.size === 1) {
       const [rest] = [...S.pointers.values()];
-      S.gesture = { kind: 'pan', node: null, moved: true, startX: rest.x, startY: rest.y, view0: { ...S.view }, pointerType: e.pointerType };
+      S.gesture = { kind: S.d3 ? 'orbit' : 'pan', node: null, moved: true, startX: rest.x, startY: rest.y, lastX: rest.x, lastY: rest.y, lastMove: 0, view0: { ...S.view }, pointerType: e.pointerType };
     } else if (S.pointers.size === 0) {
       S.gesture = null;
     }
@@ -1350,8 +1868,11 @@ function onPointerUp(e) {
   S.els.canvas.classList.remove('panning');
   if (g.kind === 'node' && g.moved) endDrag(g.node);
   if (!g.moved && e.type !== 'pointercancel') onTap(g.node, e);
+  // Only a release in motion is a flick; holding still first means stop here.
+  if (g.kind === 'orbit' && (S.reduced || e.timeStamp - g.lastMove > 80)) S.spinV = { yaw: 0, pitch: 0 };
   S.gesture = null;
   if (S.pointers.size) S.pointers.clear();
+  startLoop();
 }
 
 function onPointerLeave(e) {
@@ -1393,6 +1914,7 @@ function updateHover(e) {
 function beginDrag(node) {
   node.fx = node.x;
   node.fy = node.y;
+  node.fz = node.z;
   holdReload(HOLD_DRAG);
   S.alphaTarget = 0.3;
   S.alpha = Math.max(S.alpha, 0.3);
@@ -1402,6 +1924,7 @@ function beginDrag(node) {
 function endDrag(node) {
   node.fx = null;
   node.fy = null;
+  node.fz = null;
   S.alphaTarget = 0;
   releaseReload(HOLD_DRAG);
   startLoop();
