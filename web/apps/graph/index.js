@@ -27,13 +27,14 @@ const TYPES = [
   { type: 'person', label: 'People', app: 'people' },
   { type: 'link', label: 'Saved', app: 'saved' },
   { type: 'focus', label: 'Focus', app: 'focus' },
+  { type: 'reminder', label: 'Reminders', app: 'reminders' },
   { type: 'reel', label: 'Reels', app: 'reels' },
   { type: 'idea', label: 'Reel ideas', app: 'reels' },
   { type: 'hook', label: 'Hooks', app: 'reels' },
   { type: 'day', label: 'Days', app: null, color: '#8e8e93' },
   { type: 'tag', label: 'Tags', app: null, color: '#64d2ff' },
 ];
-const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', deal: 'Deal', person: 'Person', link: 'Saved link', focus: 'Focus', reel: 'Reel', idea: 'Reel idea', hook: 'Hook', day: 'Day', tag: 'Tag' };
+const TYPE_NAME = { note: 'Note', task: 'Task', event: 'Event', post: 'Post', video: 'Video', chat: 'Chat', habit: 'Habit', deal: 'Deal', person: 'Person', link: 'Saved link', focus: 'Focus', reminder: 'Reminder', reel: 'Reel', idea: 'Reel idea', hook: 'Hook', day: 'Day', tag: 'Tag' };
 // Used only when /apps.json cannot be read (the tile colours from SPEC.md).
 const FALLBACK = { notes: '#ffcc00', tasks: '#5e5ce6', calendar: '#ffffff', jakestagram: '#e1306c', jaketube: '#e62117', jakegpt: '#10a37f', habits: '#ff9f0a', graph: '#bf5af2' };
 const FALLBACK_LABELS = { notes: 'Notes', tasks: 'Tasks', calendar: 'Calendar', jakestagram: 'Jakestagram', jaketube: 'JakeTube', jakegpt: 'JakeGPT', habits: 'Habits' };
@@ -1185,7 +1186,7 @@ function draw() {
   const fadeBy = S.tune.textFade;
   const labelAlpha = (n) => {
     const start = (n.deg >= 12 ? 0.16 : n.deg >= 6 ? 0.34 : n.deg >= 3 ? 0.7 : 1.1) * fadeBy;
-    return Math.min(1, Math.max(0, (k - start) / 0.22));
+    return Math.min(1, Math.max(0, (k - start) / 0.1));
   };
   // Collect the candidates (selected first, then hover, neighbours, matches, then the rest)
   // and skip any label whose box overlaps one already placed.

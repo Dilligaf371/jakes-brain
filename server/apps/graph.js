@@ -276,6 +276,15 @@ export function buildGraph({ db, log, external = {} }) {
       tagged.push([id, String(row.title)]);
     }
   });
+  from('reminders', () => {
+    for (const row of db.prepare('SELECT id, title, due_at, done FROM reminders').all()) {
+      const id = `reminder:${row.id}`;
+      const day = localDay(row.due_at);
+      addNode({ id, type: 'reminder', label: trimLabel(clean(row.title)), app: 'reminders', route: '#/reminders', date: day, meta: { done: Boolean(row.done) } });
+      linkDay(id, day);
+      tagged.push([id, String(row.title)]);
+    }
+  });
   from('focus_sessions', () => {
     for (const row of db.prepare('SELECT id, label, minutes, started_at FROM focus_sessions').all()) {
       const id = `focus:${row.id}`;

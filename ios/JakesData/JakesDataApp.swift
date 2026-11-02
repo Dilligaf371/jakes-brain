@@ -1,9 +1,15 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct JakesDataApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var activity = SceneActivity()
+
+    init() {
+        // Set before launch finishes, or a tap on a notification that opened the app is lost.
+        UNUserNotificationCenter.current().delegate = ReminderScheduler.shared
+    }
 
     var body: some Scene {
         WindowGroup {

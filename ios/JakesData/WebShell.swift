@@ -83,7 +83,7 @@ struct WebShell: UIViewRepresentable {
         let info = Bundle.main.infoDictionary ?? [:]
         let short = info["CFBundleShortVersionString"] as? String ?? "0"
         let build = info["CFBundleVersion"] as? String ?? "0"
-        let payload: [String: Any] = ["native": true, "canRecord": true, "version": "\(short) (\(build))"]
+        let payload: [String: Any] = ["native": true, "canRecord": true, "canNotify": true, "version": "\(short) (\(build))"]
         let json = (try? JSONSerialization.data(withJSONObject: payload))
             .flatMap { String(data: $0, encoding: .utf8) } ?? #"{"native":true}"#
         return "window.JakesData = \(json);"
@@ -125,6 +125,10 @@ struct WebShell: UIViewRepresentable {
             guard message.name == WebShell.messageHandlerName,
                   let body = message.body as? [String: Any]
             else { return }
+            if body["type"] as? String == "reminders" {
+                ReminderScheduler.shared.sync()
+                return
+            }
             if body["type"] as? String == "voice" {
                 voiceRecorder.handle(action: body["action"] as? String, webView: message.webView)
                 return
@@ -168,6 +172,7 @@ struct WebShell: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             parent.controller.isPageLoaded = true
             webView.scrollView.refreshControl?.endRefreshing()
+            ReminderScheduler.shared.attach(webView)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

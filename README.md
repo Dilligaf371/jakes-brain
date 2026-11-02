@@ -26,6 +26,7 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 | Habits | daily check-ins, streaks, 7-day strip |
 | Files | read-only browser of PC folders with previews |
 | Weather | Open-Meteo forecast for a chosen city |
+| Reminders | timed reminders that pop up as iPhone notifications, even with the app closed |
 | Reels | today's proposed reels, hook ideas and top performers from the reels tracker |
 | Deals | brand deals, deliverables, invoices and what's owed; due dates appear in Calendar |
 | People | contact list; `@handle` in any note or deal links that person in the Graph |

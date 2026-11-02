@@ -1,0 +1,16 @@
+.app-reminders .compose { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+.app-reminders .compose .input { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 44px; }
+.app-reminders .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-reminders .chip { min-height: 36px; border: 0; }
+.app-reminders .add { min-height: 44px; }
+.app-reminders .row { gap: 10px; }
+.app-reminders .check { flex: none; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--muted); background: none; color: #fff; position: relative; cursor: pointer; }
+.app-reminders .check::before { content: ''; position: absolute; inset: -9px; }
+.app-reminders .check.on { background: var(--accent); border-color: var(--accent); }
+.app-reminders .label { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.app-reminders .what { font-size: 17px; overflow-wrap: anywhere; }
+.app-reminders .sub { font-size: 13px; color: var(--muted); }
+.app-reminders .sub.late { color: var(--red); }
+.app-reminders .done .what { color: var(--muted); text-decoration: line-through; }
+.app-reminders .del { flex: none; width: 44px; height: 44px; margin-right: -12px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.app-reminders .warn { margin: 0 0 12px; color: var(--red); font-size: 15px; }

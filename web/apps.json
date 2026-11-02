@@ -9,6 +9,7 @@
     "graph",
     "calendar",
     "tasks",
+    "reminders",
     "habits",
     "weather",
     "files",
@@ -105,6 +106,11 @@
     "bots": {
       "label": "Bots",
       "color": "#3a3a3c"
+    },
+    "reminders": {
+      "label": "Reminders",
+      "color": "#c2410c",
+      "badge": "/api/reminders/badge"
     }
   }
 }
