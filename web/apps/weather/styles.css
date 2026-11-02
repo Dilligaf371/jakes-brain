@@ -161,6 +161,68 @@
 .app-weather .main .card + .card { margin-top: 12px; }
 .app-weather .main .section-title + .card { margin-top: 0; }
 
+/* ---- family card: one tappable row per person */
+.app-weather .hero .who {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .family { padding: 0 14px; }
+.app-weather .family li { list-style: none; border-bottom: 1px solid var(--hair); }
+.app-weather .family li:last-child { border-bottom: 0; }
+
+.app-weather .fam {
+  min-height: 60px;
+  padding: 8px 0;
+  gap: 10px;
+  border-bottom: 0;
+}
+
+.app-weather .fam .f-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+
+.app-weather .fam .f-name { font-weight: 600; }
+
+.app-weather .fam .f-sub {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .fam .f-wx {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.app-weather .fam .f-temps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 64px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-weather .fam .f-temp { font-size: 22px; font-weight: 500; line-height: 1.1; }
+.app-weather .fam .f-hl { font-size: 13px; color: var(--muted); }
+.app-weather .fam .f-note { color: var(--muted); }
+
+@media (hover: hover) {
+  .app-weather .fam:hover { background: var(--track); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+}
+
 /* ---- search screen */
 .app-weather .search-form {
   position: relative;

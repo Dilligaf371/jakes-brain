@@ -352,6 +352,10 @@ without media work). All inputs validated (400), missing rows 404.
 - UI: if no city set → a search field with results to pick; else: city + current temp (large),
   condition, feels like, wind; an hourly strip (horizontal scroll); a 7-day list with min/max
   bars. Nav right: "Change" (search again). Units toggle °F/°C writes `weather.units`.
+- Family (added 2026-11-02): under the hero, a "Family" card with one row per person in the
+  app's `FAMILY` list (Mom & Dad — Chicago, JM — Richmond VA, T — Seattle): name, city, local
+  time, glyph, current temp, today's high/low. A row opens `#/weather/family/<id>` (that city's
+  full forecast). `/api/weather` also returns `utcOffset` (seconds) for the local time.
 
 
 ### graph  (added 2026-11-02 — "an Obsidian-like graph of all my data")

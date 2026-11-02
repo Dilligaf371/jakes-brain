@@ -261,6 +261,7 @@ function shape(entry, units, { cached, stale }) {
     lat: data.lat,
     lon: data.lon,
     timezone: data.timezone,
+    utcOffset: data.utcOffset || 0,
     units: { temp: units, wind: f ? 'mph' : 'kmh' },
     current: {
       temp: temp(data.current.temp),

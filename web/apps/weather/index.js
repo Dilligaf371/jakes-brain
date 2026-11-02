@@ -5,17 +5,28 @@
 // weather.city / weather.lat / weather.lon / weather.units via /api/settings. The last
 // forecast is kept in kit.store so the app still shows something when the PC or Open-Meteo
 // is unreachable (toast + "Showing saved data"). Glyphs are inline SVG strokes, no emoji.
+// Below Jake's own city, a "Family" card shows the current weather and local time where his
+// parents and brothers live (FAMILY); a row opens that city's full forecast at
+// #/weather/family/<id>.
 import * as kit from '../../kit.js';
 
 const { api, el, toast, haptic, navbar, section, emptyState, holdReload, releaseReload, store, debounce, navButton, icon, fmt, nav } = kit;
 
 const LAST_KEY = 'weather.last';     // { place, data, at } of the last forecast shown
+const FAMILY_KEY = 'weather.family'; // { <id>: { data, at } } last family forecasts
 const HOLD_KEY = 'weather:typing';
 const SEARCH_DEBOUNCE_MS = 350;
 const SEARCH_MIN_CHARS = 2;
 const REFRESH_MS = 10 * 60_000;      // the server cache is 10 min; refresh the view on that cadence
 const PRECIP_SHOW_AT = 10;           // show the chance of rain from 10 % up
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Where the family lives. Fixed list: edit here to add someone or follow a move.
+const FAMILY = [
+  { id: 'parents', name: 'Mom & Dad', city: 'Chicago, Illinois', lat: 41.8781, lon: -87.6298 },
+  { id: 'jm', name: 'JM', city: 'Richmond, Virginia', lat: 37.5407, lon: -77.436 },
+  { id: 't', name: 'T', city: 'Seattle, Washington', lat: 47.6062, lon: -122.3321 },
+];
 
 // WMO weather codes -> short label + glyph name.
 const CODES = {
@@ -60,6 +71,7 @@ let state = null;
 let els = null;
 let listeners = [];
 let refreshTimer = 0;
+let clockTimer = 0;
 let searchCtl = null;
 let runSearch = null;
 
@@ -82,7 +94,16 @@ export default {
       query: '',
       results: [],
       searching: false,
+      family: {},           // id -> { data, at, saved, loading, error }
+      familyInflight: null,
     };
+    const savedFamily = store.get(FAMILY_KEY, null);
+    for (const p of FAMILY) {
+      const hit = savedFamily && savedFamily[p.id];
+      if (hit && hit.data && hit.data.current && Array.isArray(hit.data.hourly) && Array.isArray(hit.data.daily) && Number.isFinite(hit.at)) {
+        state.family[p.id] = { data: hit.data, at: hit.at, saved: true, loading: false, error: null };
+      }
+    }
     runSearch = debounce(doSearch, SEARCH_DEBOUNCE_MS);
 
     const last = store.get(LAST_KEY, null);
@@ -105,13 +126,16 @@ export default {
     listen(window, 'jakesdata:foreground', onWake);
     listen(document, 'visibilitychange', () => { if (!document.hidden) onWake(); });
     refreshTimer = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+    clockTimer = setInterval(tickClocks, 20_000);
   },
 
   route(sub) {
     if (!state) return;
     state.sub = sub || '';
     show(state.sub);
-    if (screenFor(state.sub) === 'main' && (!state.forecast || state.saved)) refresh();
+    const screen = screenFor(state.sub);
+    if (screen === 'main' && (!state.forecast || state.saved)) refresh();
+    else if (screen === 'person') refreshFamily();
   },
 
   unmount() {
@@ -119,6 +143,8 @@ export default {
     listeners = [];
     clearInterval(refreshTimer);
     refreshTimer = 0;
+    clearInterval(clockTimer);
+    clockTimer = 0;
     if (runSearch) runSearch.cancel();
     runSearch = null;
     if (searchCtl) searchCtl.abort();
@@ -187,7 +213,10 @@ function onWake() {
 }
 
 async function refresh() {
-  if (!state || !state.place || screenFor(state.sub) !== 'main') return;
+  if (!state) return;
+  const screen = screenFor(state.sub);
+  if (screen === 'main' || screen === 'person') refreshFamily();
+  if (!state.place || screen !== 'main') return;
   if (state.inflight) return state.inflight;
   const { lat, lon } = state.place;
   const units = state.units;
@@ -222,6 +251,50 @@ async function refresh() {
     });
   state.inflight = p;
   return p;
+}
+
+// The family forecasts, all at once; the server caches each city for 10 minutes.
+function refreshFamily() {
+  if (!state) return null;
+  if (state.familyInflight) return state.familyInflight;
+  const units = state.units;
+  for (const p of FAMILY) {
+    const cur = state.family[p.id] || (state.family[p.id] = { data: null, at: 0, saved: false, loading: false, error: null });
+    cur.loading = true;
+  }
+  const jobs = FAMILY.map((p) => api(`/api/weather?lat=${p.lat}&lon=${p.lon}&units=${units}`, { timeout: 12_000 })
+    .then((data) => {
+      if (!state) return;
+      state.family[p.id] = { data, at: Date.parse(data.fetched_at) || Date.now(), saved: false, loading: false, error: null };
+    })
+    .catch((err) => {
+      if (!state) return;
+      const cur = state.family[p.id];
+      cur.loading = false;
+      cur.error = err;
+    }));
+  const all = Promise.all(jobs).then(() => {
+    if (!state) return;
+    state.familyInflight = null;
+    const keep = {};
+    for (const p of FAMILY) {
+      const f = state.family[p.id];
+      if (f && f.data) keep[p.id] = { data: f.data, at: f.at };
+    }
+    store.set(FAMILY_KEY, keep);
+    // A units change while this was in flight: fetch again in the new units.
+    if (FAMILY.some((p) => state.family[p.id].data && state.family[p.id].data.units && state.family[p.id].data.units.temp !== state.units)) refreshFamily();
+    render();
+  });
+  state.familyInflight = all;
+  render();
+  return all;
+}
+
+function render() {
+  if (!els) return;
+  if (els.screen === 'main') renderMain();
+  else if (els.screen === 'person') renderPerson();
 }
 
 async function setUnits(units) {
@@ -319,6 +392,7 @@ async function doSearch() {
 // would go through the same unreachable PC), else 'loading' (settings still on their way).
 function screenFor(sub) {
   if (sub === 'search') return 'search';
+  if (personFor(sub)) return 'person';
   if (state.place) return 'main';
   if (state.settingsLoaded) return 'search';
   return state.settingsError ? 'error' : 'loading';
@@ -332,6 +406,8 @@ function show(sub) {
     showSearch();
   } else if (screen === 'main') {
     showMain();
+  } else if (screen === 'person') {
+    showPerson(personFor(sub));
   } else {
     showLoading(screen === 'error');
   }
@@ -382,31 +458,8 @@ function renderMain() {
   els.updated = null;
   if (!place) return;
 
-  const hero = el('div', { class: 'hero' }, el('div', { class: 'city', text: place.city }));
-  if (f && f.current) {
-    const cur = f.current;
-    const [label, glyphName] = describe(cur.code, cur.isDay);
-    const today = f.daily && f.daily[0];
-    const windUnit = f.units && f.units.wind === 'kmh' ? 'km/h' : 'mph';
-    hero.append(
-      el('div', { class: 'temp', text: deg(cur.temp) }),
-      el('div', { class: 'cond' }, glyph(glyphName, 26), el('span', { text: label })),
-      today ? el('div', { class: 'hl', text: `H:${deg(today.max)}  L:${deg(today.min)}` }) : null,
-      el('div', { class: 'meta', text: [
-        cur.feels != null ? `Feels like ${deg(cur.feels)}` : null,
-        cur.wind != null ? `Wind ${cur.wind} ${windUnit}` : null,
-        cur.humidity != null ? `Humidity ${cur.humidity}%` : null,
-      ].filter(Boolean).join(' · ') }),
-    );
-  } else if (state.loading) {
-    hero.append(el('div', { class: 'hero-note', text: 'Loading…' }));
-  } else {
-    hero.append(
-      el('div', { class: 'hero-note', text: "Couldn't load the forecast." }),
-      el('button', { class: 'button', type: 'button', text: 'Try again', 'on:click': () => refresh() }),
-    );
-  }
-  content.append(hero);
+  content.append(heroBlock(place.city, null, f, state.loading, () => refresh()));
+  content.append(section('Family'), familyList());
 
   if (f && f.current) {
     const strip = hourlyStrip(f);
@@ -424,6 +477,139 @@ function renderMain() {
 
   els.updated = el('p', { class: 'updated', text: updatedText() });
   content.append(els.updated);
+}
+
+// City (and whose city), big temperature, condition, high/low, details.
+function heroBlock(city, who, f, loading, onRetry) {
+  const hero = el('div', { class: 'hero' });
+  if (who) hero.append(el('div', { class: 'who' }, who));
+  hero.append(el('div', { class: 'city', text: city }));
+  if (f && f.current) {
+    const cur = f.current;
+    const [label, glyphName] = describe(cur.code, cur.isDay);
+    const today = f.daily && f.daily[0];
+    const windUnit = f.units && f.units.wind === 'kmh' ? 'km/h' : 'mph';
+    hero.append(
+      el('div', { class: 'temp', text: deg(cur.temp) }),
+      el('div', { class: 'cond' }, glyph(glyphName, 26), el('span', { text: label })),
+      today ? el('div', { class: 'hl', text: `H:${deg(today.max)}  L:${deg(today.min)}` }) : null,
+      el('div', { class: 'meta', text: [
+        cur.feels != null ? `Feels like ${deg(cur.feels)}` : null,
+        cur.wind != null ? `Wind ${cur.wind} ${windUnit}` : null,
+        cur.humidity != null ? `Humidity ${cur.humidity}%` : null,
+      ].filter(Boolean).join(' · ') }),
+    );
+  } else if (loading) {
+    hero.append(el('div', { class: 'hero-note', text: 'Loading…' }));
+  } else {
+    hero.append(
+      el('div', { class: 'hero-note', text: "Couldn't load the forecast." }),
+      el('button', { class: 'button', type: 'button', text: 'Try again', 'on:click': onRetry }),
+    );
+  }
+  return hero;
+}
+
+// One row per family member: name, city · local time, glyph, temperature, high/low.
+function familyList() {
+  const rows = FAMILY.map((p) => {
+    const entry = state.family[p.id];
+    const f = entry && entry.data;
+    const cur = f && f.current;
+    const today = f && f.daily && f.daily[0];
+    let right;
+    if (cur) {
+      const [label, glyphName] = describe(cur.code, cur.isDay);
+      const g = glyph(glyphName, 26);
+      g.setAttribute('role', 'img');
+      g.setAttribute('aria-label', label);
+      right = el('span', { class: 'f-wx' },
+        g,
+        el('span', { class: 'f-temps' },
+          el('span', { class: 'f-temp', text: deg(cur.temp) }),
+          today ? el('span', { class: 'f-hl', text: `${deg(today.max)} / ${deg(today.min)}` }) : null));
+    } else {
+      right = el('span', { class: 'f-note', text: entry && entry.loading ? '…' : '—' });
+    }
+    return el('li', {},
+      el('button', { class: 'row tappable fam', type: 'button', 'on:click': () => openPerson(p) },
+        el('span', { class: 'f-text' },
+          el('span', { class: 'f-name', text: p.name }),
+          el('span', { class: 'f-sub' }, el('span', { text: p.city.split(',')[0] }), clockFor(f))),
+        right,
+        chevron()));
+  });
+  return el('ul', { class: 'card family', 'aria-label': 'Family' }, rows);
+}
+
+function openPerson(p) {
+  if (!state) return;
+  haptic('light');
+  nav.go(`#/weather/family/${p.id}`);
+}
+
+function personFor(sub) {
+  const m = /^family\/([a-z0-9-]+)$/.exec(String(sub || ''));
+  return m ? FAMILY.find((p) => p.id === m[1]) || null : null;
+}
+
+function showPerson(p) {
+  if (els && els.screen === 'person' && els.person === p) {
+    renderPerson();
+    return;
+  }
+  const content = el('div', { class: 'app-content main' });
+  state.root.replaceChildren(navbar({ title: p.name, back: true }), content);
+  els = { screen: 'person', person: p, content };
+  renderPerson();
+}
+
+function renderPerson() {
+  if (!state || !els || els.screen !== 'person') return;
+  const p = els.person;
+  const entry = state.family[p.id];
+  const f = entry && entry.data;
+  const content = els.content;
+  const oldStrip = content.querySelector('.strip');
+  const stripScroll = oldStrip ? oldStrip.scrollLeft : 0;
+  content.replaceChildren();
+  content.append(heroBlock(p.city, el('span', {}, el('span', { text: p.name }), clockFor(f)), f, Boolean(entry && entry.loading), () => refreshFamily()));
+  if (f && f.current) {
+    const strip = hourlyStrip(f);
+    content.append(section('Hourly'), strip);
+    content.append(section('7 days'), dailyList(f));
+    if (stripScroll) strip.querySelector('.strip').scrollLeft = stripScroll;
+    let note;
+    if (entry.saved || entry.error) note = `Showing saved data from ${ago(entry.at)}`;
+    else if (f.stale) note = `Open-Meteo unreachable · data from ${ago(entry.at)}`;
+    else if (entry.loading) note = 'Updating…';
+    else note = ago(entry.at) === 'just now' ? 'Updated just now' : `Updated ${ago(entry.at)}`;
+    content.append(el('p', { class: 'updated', text: note }));
+  }
+}
+
+// " · 1:45 PM", kept ticking by tickClocks(); nothing when the offset is unknown.
+function clockFor(f) {
+  if (!f || !Number.isFinite(Number(f.utcOffset))) return null;
+  return el('span', { class: 'clock', 'data-offset': String(f.utcOffset), text: ` · ${localTime(f.utcOffset)}` });
+}
+
+function tickClocks() {
+  if (!state) return;
+  for (const c of state.root.querySelectorAll('.clock[data-offset]')) {
+    c.textContent = ` · ${localTime(c.dataset.offset)}`;
+  }
+}
+
+// The current wall-clock time at a place, from its UTC offset in seconds: "1:45 PM".
+function localTime(offset) {
+  if (!Number.isFinite(Number(offset))) return '';
+  const d = new Date(Date.now() + Number(offset) * 1000);
+  let h = d.getUTCHours();
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  const ampm = h < 12 ? 'AM' : 'PM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
 }
 
 function updatedText() {
