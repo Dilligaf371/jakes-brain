@@ -42,10 +42,10 @@ const FALLBACK_LABELS = { notes: 'Notes', tasks: 'Tasks', calendar: 'Calendar', 
 const ALPHA_MIN = 0.001;
 const ALPHA_DECAY = 1 - Math.pow(ALPHA_MIN, 1 / 300); // ~300 ticks from 1 to ALPHA_MIN
 const VELOCITY_KEEP = 0.55;                            // velocity decay 0.45
-const REPEL = 95;                                      // many-body strength (times mass)
+const REPEL = 190;                                      // many-body strength (times mass)
 const REPEL_CELL = 110;                                // exact pairwise inside the 3x3 neighbourhood of this cell size
 const MAX_GRID = 40;                                   // cells per axis cap (the cell grows instead)
-const LINK_DIST = 54;                                  // one rest length, like Obsidian
+const LINK_DIST = 64;                                  // one rest length, like Obsidian
 const LABEL_COLLIDE_MAX = 400;                         // beyond this many on-screen labels, skip the overlap pass
 const GRAVITY = 0.02;
 const TUNE_KEY = 'graph.tune';
@@ -335,7 +335,7 @@ function resetTune() {
 
 function sizeNodes() {
   for (const n of S.nodes) {
-    n.r = Math.min(17, 2.6 + 1.25 * Math.sqrt(n.deg)) * S.tune.nodeSize;
+    n.r = Math.min(24, 2.8 + 1.7 * Math.sqrt(n.deg)) * S.tune.nodeSize;
     n.m = 0.55 + n.r / 7;
   }
 }
@@ -757,8 +757,10 @@ function tick() {
       n.vy = 0;
       continue;
     }
-    n.vx -= n.x * GRAVITY * S.tune.center * alpha;
-    n.vy -= n.y * GRAVITY * S.tune.center * alpha;
+    // Unlinked nodes get a stronger pull so they orbit close instead of a distant ring.
+    const pull = GRAVITY * S.tune.center * alpha * (n.deg ? 1 : 3);
+    n.vx -= n.x * pull;
+    n.vy -= n.y * pull;
     n.vx *= VELOCITY_KEEP;
     n.vy *= VELOCITY_KEEP;
     n.x += n.vx;
@@ -1182,7 +1184,7 @@ function draw() {
   // Bigger nodes keep their names further out, so the map stays readable when zoomed out.
   const fadeBy = S.tune.textFade;
   const labelAlpha = (n) => {
-    const start = (n.deg >= 12 ? 0.32 : n.deg >= 6 ? 0.6 : n.deg >= 3 ? 0.95 : 1.4) * fadeBy;
+    const start = (n.deg >= 12 ? 0.16 : n.deg >= 6 ? 0.34 : n.deg >= 3 ? 0.7 : 1.1) * fadeBy;
     return Math.min(1, Math.max(0, (k - start) / 0.22));
   };
   // Collect the candidates (selected first, then hover, neighbours, matches, then the rest)

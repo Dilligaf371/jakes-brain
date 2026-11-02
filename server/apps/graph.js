@@ -323,6 +323,11 @@ export function buildGraph({ db, log, external = {} }) {
     const id = `hook:${hook.id}`;
     addNode({ id, type: 'hook', label: trimLabel(clean(hook.hook) || 'Hook'), app: 'reels', route: '#/reels', date: hook.batch_date || null, meta: { maker: hook.maker_name || null } });
     topicTexts.push([id, `${hook.hook}\n${hook.reason}`]);
+    if (hook.maker_id != null) {
+      const maker = `maker:${hook.maker_id}`;
+      if (!nodes.has(maker)) addNode({ id: maker, type: 'hook', label: trimLabel(clean(hook.maker_name) || 'Hook maker'), app: 'reels', route: '#/reels', date: hook.batch_date || null, meta: { maker: true } });
+      addEdge(id, maker, 'link');
+    }
   }
   for (const day of external.logs || []) {
     const id = ensureDay(day.date);
