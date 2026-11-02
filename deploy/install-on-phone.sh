@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../ios"
 UDID=${JAKESDATA_DEVICE_UDID:-00008150-00062DD41408401C}
 xcodegen generate >/dev/null
-xcodebuild -project JakesData.xcodeproj -scheme Jake's Data -configuration Release -destination "generic/platform=iOS" \
+xcodebuild -project JakesData.xcodeproj -scheme JakesData -configuration Release -destination "generic/platform=iOS" \
   -derivedDataPath build -allowProvisioningUpdates -allowProvisioningDeviceRegistration build -quiet
 APP=build/Build/Products/Release-iphoneos/JakesData.app
 xcrun devicectl device install app --device "$UDID" "$APP"
