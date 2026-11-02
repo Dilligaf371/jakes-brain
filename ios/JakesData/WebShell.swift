@@ -33,6 +33,8 @@ struct WebShell: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true          // <video playsinline> inside the page (JakeTube)
+        configuration.mediaTypesRequiringUserActionForPlayback = []  // let the page start playback itself
         let content = WKUserContentController()
         content.add(WeakScriptMessageHandler(context.coordinator), name: Self.messageHandlerName)
         content.addUserScript(WKUserScript(
