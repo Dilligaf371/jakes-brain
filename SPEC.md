@@ -438,9 +438,14 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
 ### connector  (added 2026-11-02 — "Claude should update my app like it updates Notion")
 - `server/apps/connector.js`: a remote MCP server (Streamable HTTP, stateless, JSON responses) on a
   second listener, 127.0.0.1:4801, answering `POST /mcp` for a signed-in client and 404 for anything
-  outside the sign-in paths. Tools call the app's own API over loopback; add a tool by adding an
-  entry to `TOOLS`. Current tools: food_log/day/history/search/update/
-  delete/goals, tasks_list/add/set_done, grocery_list/add, notes_search/create.
+  outside the sign-in paths. Tools call the app's own API over loopback.
+- Claude can do everything in the app with no upkeep: `app_catalog` lists the live routes from the
+  router, explained by each module's header comment and SPEC section (plus its source when the header
+  is thin), and `app_read` / `app_write` call any of them. New modules and routes appear when they
+  deploy; connector.js does not change. Held back: `/api/connector*` (who may sign in), writes under
+  `/api/bots*` (real money), raw `/upload` routes (a JSON tool can't carry a file), `connector.*`
+  settings. The dedicated tools (food_log/day/history/search/update/delete/goals, tasks_list/add/
+  set_done, grocery_list/add, notes_search/create) tune the things Jake does most.
 - `deploy/connector/`: the tunnel (ngrok or Cloudflare) as `jakes-brain-tunnel.service`, and
   `setup-connector.sh` (run from the Mac). Only :4801 is tunnelled; :4800 stays LAN/tailnet-only.
 - `server/apps/_connector_auth.js`: the sign-in, an OAuth 2.1 authorization server (discovery,

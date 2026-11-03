@@ -27,7 +27,10 @@ shown on his iPhone (native shell) and on the PC (browser app window). Read `REA
   and the tailnet; do not expose it publicly without adding auth. The one public piece is the
   Claude connector (`server/apps/connector.js`, `deploy/connector/`): a separate 127.0.0.1:4801
   listener behind a real OAuth sign-in (`server/apps/_connector_auth.js`). Never tunnel :4800, and
-  never put a secret in a URL. Give Claude new abilities by adding tools there.
+  never put a secret in a URL. Claude reaches every `/api` route automatically through `app_catalog`,
+  `app_read` and `app_write`, so a new feature needs no connector work: just document its routes and
+  request bodies in the module's header comment, which is what Claude reads. Hold a route back only
+  by adding it to DENY or READ_ONLY in connector.js; anything that moves real money belongs there.
 - **Verify before claiming done:** `node --check` your files, start a local server
   (`JAKESDATA_PORT=4811 JAKESDATA_DATA=/tmp/jd-data JAKESDATA_CONFIG=<scratch copy of server/config.json> node server/index.js`),
   curl the routes, and look at the UI at 390×844 (Playwright at

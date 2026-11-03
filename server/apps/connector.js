@@ -7,7 +7,12 @@
 // Nothing here is reachable without Jake's password, and the address itself holds no secret.
 //
 // Tools call this server's own JSON API over loopback, so they get exactly the same validation
-// as the app. To give Claude a new ability, add an entry to TOOLS below.
+// as the app. Claude reaches the whole app with no upkeep: app_catalog lists the live routes from
+// the router, documented by each module's header comment and its SPEC.md section, and app_read /
+// app_write call any of them. A new module or route is available as soon as it deploys, so nothing
+// here needs changing for it. Only three things stay out, see DENY, READ_ONLY and UPLOAD below.
+// The dedicated tools in TOOLS are for what Jake does most: add one only to tune how Claude
+// behaves, never to expose a feature.
 //
 //   JAKESDATA_CONNECTOR_PORT   (4801; when JAKESDATA_PORT is set and this is not: that port + 1;
 //                               0 turns the connector off)
@@ -21,6 +26,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readJsonBody, sendJson, HttpError } from '../http.js';
 import { createAuth, MIGRATIONS } from './_connector_auth.js';
 
@@ -33,11 +39,27 @@ const BODY_LIMIT = 1024 * 1024;
 const API_TIMEOUT_MS = 20_000;
 const HEADERS_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const APP_TIMEOUT_MS = 55_000;  // a JakeGPT reply streams for a while
+const OUTPUT_MAX = 100_000;     // characters of one reply handed back to Claude
+const SOURCE_MAX = 24_000;      // characters of a module's source in app_catalog
+const THIN_HEADER_LINES = 6;    // a shorter header can't explain the request bodies, so add the source
+const APPS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const SPEC_FILE = path.join(APPS_DIR, '..', '..', 'SPEC.md');
+const APP_ORIGIN = `http://127.0.0.1:${MAIN_PORT}`;
+const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+// Stays out of the connector entirely: who may sign in is decided on the private app only.
+const DENY = /^\/api\/connector(\/|$)/;
+// The Zora bot trades real money, so nothing that writes under here ever goes through Claude.
+const READ_ONLY = /^\/api\/bots(\/|$)/;
+// Raw file bodies, which a JSON tool call can't carry.
+const UPLOAD = /\/upload$/;
 
 const INSTRUCTIONS = `Jake's Brain is Jake's personal app (food log, tasks, groceries, notes), running on his own PC.
-Food log: whenever Jake says he ate or drank something, log it with food_log. Estimate calories and protein/carbs/fat in grams when he doesn't give them, and put how you estimated in notes (e.g. "Chopt published nutrition" or "Estimate: bread ~430 + ham ~120"). meal is breakfast, lunch, dinner or snack. date is Jake's local date (YYYY-MM-DD) and defaults to today on his PC; use yesterday's date when he is catching up on yesterday. Before estimating, food_search for the food: he eats the same things often (e.g. his protein shake, 4 eggs, PB toast) and should get the same numbers each time. Log each item as its own entry. After logging, tell him the day's totals from the reply.`;
+Food log: whenever Jake says he ate or drank something, log it with food_log. Estimate calories and protein/carbs/fat in grams when he doesn't give them, and put how you estimated in notes (e.g. "Chopt published nutrition" or "Estimate: bread ~430 + ham ~120"). meal is breakfast, lunch, dinner or snack. date is Jake's local date (YYYY-MM-DD) and defaults to today on his PC; use yesterday's date when he is catching up on yesterday. Before estimating, food_search for the food: he eats the same things often (e.g. his protein shake, 4 eggs, PB toast) and should get the same numbers each time. Log each item as its own entry. After logging, tell him the day's totals from the reply.
+Everything else: the app does far more than the dedicated tools here (workouts, habits, reminders, calendar, people, deals, saved links, voice memos, focus, day log, reels, files and any app added later). To do anything in it, call app_catalog for that app, then app_read or app_write with the routes it lists. app_catalog always reflects the running app.`;
 
 let auth = null;
+let liveRoutes = () => [];
 let listening = false;
 let lastCall = null;
 
@@ -46,6 +68,7 @@ export default {
   migrations: MIGRATIONS,
   register(r, ctx) {
     auth = createAuth({ db: ctx.db, settings: ctx.settings, dataDir: ctx.dataDir, log: ctx.log, port: PORT });
+    liveRoutes = ctx.routes;
     fs.rmSync(path.join(ctx.dataDir, 'connector', 'secret'), { force: true }); // the old URL secret
 
     const info = () => {
@@ -154,13 +177,14 @@ async function dispatch(msg, ctx) {
       return result({});
     case 'tools/list':
       return result({
-        tools: TOOLS.map((t) => ({
-          name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
+        tools: [...TOOLS, ...APP_TOOLS].map((t) => ({
+          name: t.name, title: t.title, inputSchema: t.inputSchema,
+          description: typeof t.description === 'function' ? t.description() : t.description,
           annotations: { readOnlyHint: Boolean(t.readOnly), destructiveHint: Boolean(t.destructive), openWorldHint: false },
         })),
       });
     case 'tools/call': {
-      const tool = TOOLS.find((t) => t.name === params.name);
+      const tool = [...TOOLS, ...APP_TOOLS].find((t) => t.name === params.name);
       if (!tool) return rpcError(id, -32602, `unknown tool: ${params.name}`);
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
       lastCall = { tool: tool.name, at: new Date().toISOString() };
@@ -204,6 +228,178 @@ const q = (obj) => {
 };
 const enc = encodeURIComponent;
 const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+// ---------------------------------------------------------------- the whole app
+
+// Which app a route belongs to: its module, or "core" for the server's own routes.
+const moduleFile = (id) => path.join(APPS_DIR, `${id}.js`);
+const reachable = (pattern, method) => pattern.startsWith('/api/') && !DENY.test(pattern) && !UPLOAD.test(pattern)
+  && (method === 'GET' || (WRITE_METHODS.includes(method) && !READ_ONLY.test(pattern)));
+
+function appIndex() {
+  const apps = new Map();
+  for (const line of liveRoutes()) {
+    const [method, pattern] = line.split(' ');
+    if (!reachable(pattern, method)) continue;
+    const segment = pattern.split('/')[2];
+    const id = /^[a-z0-9-]+$/.test(segment) && fs.existsSync(moduleFile(segment)) ? segment : 'core';
+    if (!apps.has(id)) apps.set(id, []);
+    apps.get(id).push(`${method} ${pattern}`);
+  }
+  return apps;
+}
+
+function readText(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+const headerOf = (source) => {
+  const lines = [];
+  for (const line of source.split('\n')) {
+    if (!line.startsWith('//')) break;
+    lines.push(line.replace(/^\/\/ ?/, ''));
+  }
+  return lines;
+};
+
+function specSection(id) {
+  const m = new RegExp(`^### ${id}\\b[^\\n]*\\n([\\s\\S]*?)(?=^##)`, 'm').exec(readText(SPEC_FILE));
+  return m ? m[1].trim() : null;
+}
+
+function describeApp(id, wantSource) {
+  const apps = appIndex();
+  if (!apps.has(id)) throw new ApiFail(`no app "${id}". Apps: ${[...apps.keys()].sort().join(', ')}`);
+  const source = id === 'core' ? '' : readText(moduleFile(id));
+  const header = headerOf(source);
+  const out = { app: id, routes: apps.get(id), about: header.join('\n'), notes: specSection(id) };
+  if (source && (wantSource || header.length < THIN_HEADER_LINES)) {
+    out.source = source.length > SOURCE_MAX ? `${source.slice(0, SOURCE_MAX)}\n… (cut off)` : source;
+  }
+  return out;
+}
+
+async function readLimited(res) {
+  const decoder = new TextDecoder();
+  let text = '';
+  let truncated = false;
+  try {
+    for await (const chunk of res.body) {
+      text += decoder.decode(chunk, { stream: true });
+      if (text.length > OUTPUT_MAX) {
+        truncated = true;
+        break;
+      }
+    }
+  } catch (err) {
+    if (!text) throw err;
+    truncated = true; // the deadline hit a streaming reply: hand back what arrived
+  }
+  return { text: text.slice(0, OUTPUT_MAX), truncated };
+}
+
+async function callApp(method, rawPath, query, body) {
+  let url;
+  let pathname;
+  try {
+    url = new URL(String(rawPath ?? ''), APP_ORIGIN);
+    pathname = decodeURIComponent(url.pathname).replace(/\/+$/, '');
+  } catch {
+    throw new ApiFail('path must look like /api/food/day/today');
+  }
+  if (url.origin !== APP_ORIGIN || !pathname.startsWith('/api/')) throw new ApiFail('path must start with /api/');
+  if (DENY.test(pathname)) throw new ApiFail("the connector's own settings can only be changed in the app");
+  if (method !== 'GET' && READ_ONLY.test(pathname)) throw new ApiFail('this app is read-only through Claude');
+  if (method !== 'GET' && UPLOAD.test(pathname)) throw new ApiFail('file uploads have to be done in the app');
+  if (pathname === '/api/settings' && method !== 'GET' && Object.keys(body || {}).some((k) => k.startsWith('connector.'))) {
+    throw new ApiFail("the connector's own settings can only be changed in the app");
+  }
+  for (const [key, value] of Object.entries(query || {})) {
+    if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+  }
+  const res = await fetch(url, {
+    method,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(APP_TIMEOUT_MS),
+  });
+  if (res.status === 204) return { ok: true };
+  const type = res.headers.get('content-type') || '';
+  if (res.ok && !/json|text|ndjson/i.test(type)) {
+    if (res.body) await res.body.cancel();
+    return { binary: true, contentType: type, bytes: Number(res.headers.get('content-length')) || null, note: 'This is a media file, so it can only be viewed in the app.' };
+  }
+  const { text, truncated } = await readLimited(res);
+  let data = null;
+  try {
+    data = truncated ? null : JSON.parse(text);
+  } catch { /* plain text or a stream of JSON lines */ }
+  if (!res.ok) throw new ApiFail(`${res.status}: ${(data && data.error) || res.statusText}`);
+  if (data !== null) return data;
+  return truncated ? { text, truncated: true, note: 'Cut off: use query parameters to ask for less.' } : { text };
+}
+
+const QUERY = { type: 'object', description: 'Query string values, e.g. {"q": "protein"}', additionalProperties: true };
+const APP_PATH = { type: 'string', description: 'A route from app_catalog with its :params filled in, e.g. /api/workout/sessions/12' };
+
+const APP_TOOLS = [
+  {
+    name: 'app_catalog',
+    title: 'See what the app can do',
+    description: () => `List what Jake's Brain can do, read live from the running app so new features appear on their own. Call it with an app name to get that app's routes and how to use them, then use app_read and app_write. Apps right now: ${[...appIndex().keys()].sort().join(', ')}.`,
+    readOnly: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        app: { type: 'string', description: 'One app. Leave it out for the list of all apps and what each one is.' },
+        source: { type: 'boolean', description: "Also return the app's server code, when the docs don't show which fields a route takes" },
+      },
+    },
+    run({ app, source }) {
+      if (app) return describeApp(String(app), Boolean(source));
+      return {
+        apps: [...appIndex()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([id, routes]) => ({
+          app: id,
+          about: id === 'core' ? 'Server status, settings and the list of apps.' : headerOf(readText(moduleFile(id)))[0] || '',
+          routes: routes.length,
+        })),
+      };
+    },
+  },
+  {
+    name: 'app_read',
+    title: 'Read from the app',
+    description: 'Read anything in Jake\'s Brain: GET any route that app_catalog lists.',
+    readOnly: true,
+    inputSchema: { type: 'object', properties: { path: APP_PATH, query: QUERY }, required: ['path'] },
+    run: ({ path: p, query }) => callApp('GET', p, query),
+  },
+  {
+    name: 'app_write',
+    title: 'Change something in the app',
+    description: 'Add, change or delete anything in Jake\'s Brain: call any POST, PUT, PATCH or DELETE route that app_catalog lists.',
+    destructive: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        method: { type: 'string', enum: WRITE_METHODS },
+        path: APP_PATH,
+        query: QUERY,
+        body: { type: 'object', description: 'The JSON body the route takes', additionalProperties: true },
+      },
+      required: ['method', 'path'],
+    },
+    run({ method, path: p, query, body }) {
+      const verb = String(method || '').toUpperCase();
+      if (!WRITE_METHODS.includes(verb)) throw new ApiFail(`method must be one of ${WRITE_METHODS.join(', ')}`);
+      return callApp(verb, p, query, body);
+    },
+  },
+];
 
 // ---------------------------------------------------------------- tools
 

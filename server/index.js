@@ -241,6 +241,7 @@ function makeCtx(id) {
     homeDir: os.homedir(),
     expandHome,
     settings: store.settings,      // { all(), get(key, fallback), patch({k: v|null}) }
+    routes: () => router.routes(), // every live route, 'METHOD /pattern' (the connector's catalog)
     webDir: WEB_DIR,
     startedAt,
   };

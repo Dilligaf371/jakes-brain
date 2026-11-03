@@ -59,7 +59,11 @@ On the free ngrok plan a browser sees ngrok's own warning page once before the s
 **Visit Site**. Claude's own requests never see it.
 
 Then just talk to it: "log 4 eggs and PB toast for breakfast", "what have I eaten today",
-"set my goal to 2400 calories and 180 g protein".
+"set my goal to 2400 calories and 180 g protein", "add a habit", "what did I lift last week".
+
+Claude can do everything in the app. It reads the running app's routes and each module's header
+comment, so a feature you add through GitHub is available as soon as it deploys, with no change
+here and no need to reconnect. Only file uploads have to be done in the app.
 
 ## Moving the Notion history over
 

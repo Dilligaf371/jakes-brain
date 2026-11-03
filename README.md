@@ -47,6 +47,7 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 Claude (the app, claude.ai, Claude Code) can use Jake's Brain like it uses Notion: log food, check
 today's totals, add tasks, groceries and notes. It is a custom connector served by the PC through a
 tunnel; only the connector is public, and it needs a real sign-in with your password, like Notion's.
+Claude can do everything the app does, and anything you add shows up by itself after a deploy.
 Setup: `deploy/connector/README.md`. The address and password are in Settings → Claude connector.
 
 ## Making changes
@@ -64,7 +65,8 @@ Don't edit files on the PC directly. GitHub is the source of truth and the PC on
 `{ mount(root, ctx), unmount(), route(sub) }`) and `styles.css` (every selector prefixed
 `.app-<id>`), an icon `web/icons/app-<id>.svg`, and, if it needs data, `server/apps/<id>.js`
 (export `{ id, migrations, register(r, ctx) }`). The server picks modules up on restart; the
-launcher picks tiles up on reload. `SPEC.md` has the full contract and `web/apps/tasks/` plus
+launcher picks tiles up on reload. Claude's connector picks it up too, so describe the routes and
+request bodies in the module's header comment. `SPEC.md` has the full contract and `web/apps/tasks/` plus
 `server/apps/tasks.js` are the smallest complete example.
 
 **Native shell** (`ios/`): rarely needed. Plug the phone in, unlock it, and run
