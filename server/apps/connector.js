@@ -350,7 +350,7 @@ const APP_TOOLS = [
   {
     name: 'app_catalog',
     title: 'See what the app can do',
-    description: () => `List what Jake's Brain can do, read live from the running app so new features appear on their own. Call it with an app name to get that app's routes and how to use them, then use app_read and app_write. Apps right now: ${[...appIndex().keys()].sort().join(', ')}.`,
+    description: () => `List everything Jake's Brain can do, read live from the running app. Claude keeps a saved copy of this description, so call this tool whenever a request isn't covered by another tool, even for an app not named here: new apps appear in its results first. Call it with no app for the current list, or with an app name for that app's routes and how to use them, then use app_read and app_write. Apps when this was loaded: ${[...appIndex().keys()].sort().join(', ')}.`,
     readOnly: true,
     inputSchema: {
       type: 'object',
