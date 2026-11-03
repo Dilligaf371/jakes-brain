@@ -20,7 +20,7 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 | Notes | title + body notes with autosave, search, pin, `#tags` and `[[links]]` |
 | Tasks | checklist (open / done), badge on the tile |
 | Groceries | shopping list grouped by aisle, check items into the cart, "Buy again" chips, badge on the tile |
-| Workout | Hevy-style gym log: routines, live workout with previous sets + rest timer, history, per-exercise charts and personal records |
+| Workout | Daily training program with ordered exercises, prescriptions, assessments and progress; live workout logging, rest timers, history and personal records |
 | Food | calorie + macro log: today against goals, entries by meal, 30-day history, one-tap usuals. Claude logs to it through the connector |
 | Calendar | month grid, day agenda, events |
 | Jakestagram | private Instagram: post photos and videos from the phone, feed + grid, hearts |

@@ -8,12 +8,33 @@ import * as kit from '../../kit.js';
 import { formSheet } from '../../form.js';
 import { pickExercises } from './picker.js';
 import {
-  getUnits, distUnit, fmtClock, fmtLong, digitsToClock, setText, setLabels, SET_KIND_LABELS,
+  getUnits, distanceUnit, fmtClock, fmtLong, digitsToClock, setText, setLabels, SET_KIND_LABELS,
   REST_CHOICES, blankSet, draftSet, serverSet, draftExercise, writeActive, clearActive, uid,
 } from './lib.js';
 
 const { api, el, toast, haptic, navbar, navButton, icon, confirmSheet, actionSheet, holdReload, releaseReload, nav } = kit;
 const HOLD = 'workout:logger';
+const WEEKDAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];
+
+function sourceLink(url) {
+  try {
+    if (!['http:', 'https:'].includes(new URL(url).protocol)) return null;
+    return el('a', { class: 'wo-routine-source', href: url, target: '_blank', rel: 'noopener noreferrer', text: 'View original plan' });
+  } catch { return null; }
+}
+
+export function hasRemainingProgramSets(draft) {
+  const planned = new Map();
+  for (const ex of draft.planned_exercises || []) planned.set(ex.exercise_id, (planned.get(ex.exercise_id) || 0) + ex.sets);
+  const logged = new Map();
+  for (const ex of draft.exercises) {
+    const count = ex.sets.filter((s) => s.done && serverSet(ex.kind, s, draft.unit, ex.distance_unit)).length;
+    logged.set(ex.exercise_id, (logged.get(ex.exercise_id) || 0) + count);
+  }
+  return planned.size
+    ? [...planned].some(([exerciseId, count]) => (logged.get(exerciseId) || 0) < count)
+    : draft.exercises.some((ex) => ex.sets.some((s) => !s.done));
+}
 
 export function defaultTitle(date = new Date()) {
   const h = date.getHours();
@@ -57,6 +78,39 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
   titleInput.addEventListener('input', () => { draft.title = titleInput.value; persist(); });
   titleInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') titleInput.blur(); });
 
+  let plan;
+  if (mode === 'routine') {
+    const description = el('textarea', {
+      class: 'input wo-plan-notes', rows: '3', maxlength: '4000', text: draft.notes || '',
+      placeholder: 'Warm-up, focus and other instructions', 'aria-label': 'Routine instructions',
+    });
+    description.addEventListener('input', () => { draft.notes = description.value; persist(); });
+    const days = el('div', { class: 'wo-weekdays', role: 'group', 'aria-label': 'Scheduled days' });
+    const drawDays = () => {
+      days.replaceChildren(...WEEKDAYS.map(([day, label]) => el('button', {
+        type: 'button', class: 'chip wo-weekday', text: label,
+        'aria-pressed': String((draft.weekdays || []).includes(day)),
+        'on:click': () => {
+          const selected = new Set(draft.weekdays || []);
+          if (selected.has(day)) selected.delete(day); else selected.add(day);
+          draft.weekdays = [...selected].sort((a, b) => a - b);
+          persist();
+          drawDays();
+        },
+      })));
+    };
+    drawDays();
+    plan = el('div', { class: 'wo-routine-details' },
+      description,
+      el('div', { class: 'wo-schedule-label', text: 'Scheduled days' }), days,
+      el('div', { class: 'muted wo-schedule-hint', text: 'Choose days to show this routine in your daily plan.' }),
+      sourceLink(draft.source_url));
+  } else if (draft.notes || draft.source_url) {
+    plan = el('div', { class: 'card wo-routine-details' },
+      draft.notes ? el('div', { class: 'wo-plan-notes', text: draft.notes }) : null,
+      sourceLink(draft.source_url));
+  }
+
   const statDuration = el('span', { class: 'wo-stat-v' });
   const statVolume = el('span', { class: 'wo-stat-v' });
   const statSets = el('span', { class: 'wo-stat-v' });
@@ -86,7 +140,7 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
       el('button', { type: 'button', class: 'wo-rest-btn', text: '+15', 'aria-label': 'Add 15 seconds', 'on:click': () => bumpRest(15) }),
       el('button', { type: 'button', class: 'wo-rest-btn wo-rest-skip', text: 'Skip', 'on:click': () => stopRest() })));
 
-  const content = el('div', { class: 'app-content wo-log' }, titleInput, stats, list, empty, ...tail);
+  const content = el('div', { class: 'app-content wo-log' }, titleInput, stats, plan, list, empty, ...tail);
   root.append(bar, content, restBar);
 
   render();
@@ -102,15 +156,15 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     updateStats();
   }
 
-  function columns(kind) {
+  function columns(kind, exerciseDistanceUnit) {
     if (kind === 'weight') return [['w', units, 'decimal'], ['r', 'Reps', 'numeric']];
     if (kind === 'reps') return [['r', 'Reps', 'numeric']];
     if (kind === 'time') return [['t', 'Time', 'numeric']];
-    return [['d', distUnit(), 'decimal'], ['t', 'Time', 'numeric']];
+    return [['d', distanceUnit(exerciseDistanceUnit, units), 'decimal'], ['t', 'Time', 'numeric']];
   }
 
   function exerciseCard(ex) {
-    const cols = columns(ex.kind);
+    const cols = columns(ex.kind, ex.distance_unit);
     const labels = setLabels(ex.sets);
     const prev = previous[ex.exercise_id] || [];
     const grid = `wo-grid-${cols.length}${mode === 'routine' ? ' no-check' : ''}`;
@@ -120,15 +174,25 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
       mode === 'routine' ? null : el('span', { class: 'wo-head-check' }, icon('check', { size: 16, strokeWidth: 2.4 })));
     const rows = ex.sets.map((s, i) => setRow(ex, s, i, labels[i], prev[i], cols, grid));
     const restLabel = ex.rest ? `Rest ${fmtClock(ex.rest)}` : 'Rest off';
-    const note = el('input', {
-      class: 'wo-note', type: 'text', value: ex.note || '', placeholder: 'Add notes here…', maxlength: '1000', 'aria-label': `Notes for ${ex.name}`,
+    const note = el('textarea', {
+      class: 'wo-note', rows: ex.note?.includes('\n') ? '3' : '1', text: ex.note || '', placeholder: 'Add notes here…', maxlength: mode === 'routine' ? '1000' : '7000', 'aria-label': `Notes for ${ex.name}`,
     });
     note.addEventListener('input', () => { ex.note = note.value; persist(); });
+    let prescription;
+    if (mode === 'routine') {
+      prescription = el('textarea', {
+        class: 'input wo-prescription-input', rows: '2', maxlength: '2000', text: ex.prescription || '',
+        placeholder: 'Targets, e.g. 3 × 8–12 reps · 2 reps in reserve', 'aria-label': `Prescription for ${ex.name}`,
+      });
+      prescription.addEventListener('input', () => { ex.prescription = prescription.value; persist(); });
+    } else if (ex.prescription) {
+      prescription = el('div', { class: 'wo-prescription', text: ex.prescription });
+    }
     return el('section', { class: 'wo-ex card', dataset: { uid: ex.uid } },
       el('div', { class: 'wo-ex-head' },
         el('button', { type: 'button', class: 'wo-ex-name', text: ex.name, 'on:click': () => exerciseMenu(ex) }),
         el('button', { type: 'button', class: 'wo-ex-more', 'aria-label': `Options for ${ex.name}`, 'on:click': () => exerciseMenu(ex) }, icon('more'))),
-      note,
+      prescription, note,
       el('button', { type: 'button', class: 'wo-rest-chip', 'on:click': () => pickRest(ex) }, icon('refresh', { size: 15, strokeWidth: 2.2 }), el('span', { text: restLabel })),
       head,
       ...rows,
@@ -141,12 +205,12 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
       type: 'button', class: `wo-set-label k-${s.kind}`, text: label, 'aria-label': `Set ${label}: ${SET_KIND_LABELS[s.kind]}. Change type or delete`,
       'on:click': () => setMenu(ex, s),
     });
-    const prevText = prev ? setText(ex.kind, prev) : '—';
+    const prevText = prev ? setText(ex.kind, prev, ex.distance_unit) : '—';
     const prevBtn = el('button', {
       type: 'button', class: 'wo-prev', text: prevText, disabled: !prev, 'aria-label': prev ? `Previous: ${prevText}. Tap to copy` : 'No previous',
-      'on:click': () => { if (prev) { fillFrom(s, prev, true); haptic('light'); render(); persist(); } },
+      'on:click': () => { if (prev) { fillFrom(s, prev, true, ex.distance_unit); haptic('light'); render(); persist(); } },
     });
-    const ph = prev ? draftSet(prev) : null;
+    const ph = prev ? draftSet(prev, false, ex.distance_unit) : null;
     const inputs = cols.map(([key, label, mode_]) => {
       const input = el('input', {
         class: 'wo-in', type: 'text', inputmode: mode_, value: s[key], placeholder: ph && ph[key] ? ph[key] : (key === 't' ? '0:00' : '–'),
@@ -176,15 +240,21 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     return row;
   }
 
-  function fillFrom(s, prev, overwrite) {
-    const d = draftSet(prev);
-    for (const key of ['w', 'r', 't', 'd']) if (overwrite || !s[key]) s[key] = d[key];
+  function fillDraftValues(s, source, overwrite) {
+    for (const key of ['w', 'r', 't', 'd']) if (overwrite || !s[key]) {
+      s[key] = source[key];
+      if (key === 'd') for (const extra of ['d_source', 'd_unit_source', 'meters_source']) s[extra] = source[extra];
+    }
+  }
+
+  function fillFrom(s, prev, overwrite, exerciseDistanceUnit) {
+    fillDraftValues(s, draftSet(prev, false, exerciseDistanceUnit), overwrite);
   }
 
   function toggleDone(ex, s, ph) {
     if (!s.done) {
-      if (ph) for (const key of ['w', 'r', 't', 'd']) if (!s[key] && ph[key]) s[key] = ph[key];
-      if (!serverSet(ex.kind, s, units)) {
+      if (ph) fillDraftValues(s, ph, false);
+      if (!serverSet(ex.kind, s, units, ex.distance_unit)) {
         toast(ex.kind === 'time' ? 'Enter a time first' : ex.kind === 'cardio' ? 'Enter a distance or time first' : 'Enter reps first', { kind: 'error' });
         haptic('error');
         return;
@@ -312,7 +382,7 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
   function addSet(ex) {
     const last = ex.sets[ex.sets.length - 1];
     const s = blankSet();
-    if (last) for (const key of ['w', 'r', 't', 'd']) s[key] = last[key];
+    if (last) fillDraftValues(s, last, true);
     ex.sets.push(s);
     haptic('light');
     persist();
@@ -340,12 +410,31 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     // History leaves the logger, which only the active workout (kept in storage) survives.
     const actions = mode === 'active' ? [{ label: 'Exercise History', value: 'history' }] : [];
     actions.push({ label: 'Replace Exercise', value: 'replace' });
+    if (ex.kind === 'cardio') actions.push({ label: 'Distance Unit', value: 'distance_unit' });
     if (i > 0) actions.push({ label: 'Move Up', value: 'up' });
     if (i < draft.exercises.length - 1) actions.push({ label: 'Move Down', value: 'down' });
     actions.push({ label: 'Remove Exercise', value: 'remove', destructive: true });
     const choice = await actionSheet({ title: ex.name, actions });
     if (choice === 'history') {
       ctx.nav.go(`#/workout/e/${ex.exercise_id}`);
+      return;
+    }
+    if (choice === 'distance_unit') {
+      const nextUnit = await actionSheet({ title: 'Distance unit', actions: [
+        { label: 'Default', value: '', selected: !ex.distance_unit },
+        ...[['m', 'Meters'], ['yd', 'Yards'], ['km', 'Kilometers'], ['mi', 'Miles']].map(([value, label]) => ({ label, value, selected: ex.distance_unit === value })),
+      ] });
+      if (nextUnit === null) return;
+      for (const s of ex.sets) {
+        const value = serverSet(ex.kind, s, units, ex.distance_unit);
+        if (value) {
+          const converted = draftSet(value, s.done, nextUnit);
+          for (const key of ['d', 'd_source', 'd_unit_source', 'meters_source']) s[key] = converted[key];
+        }
+      }
+      ex.distance_unit = nextUnit;
+      persist();
+      render();
       return;
     }
     if (choice === 'replace') {
@@ -400,12 +489,12 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
       const sets = [];
       for (const s of ex.sets) {
         if (onlyDone && !s.done) continue;
-        const v = serverSet(ex.kind, s, units);
+        const v = serverSet(ex.kind, s, units, ex.distance_unit);
         if (v) sets.push(v);
         else if (!onlyDone) sets.push({ kind: s.kind });
       }
       if (onlyDone && !sets.length) continue;
-      out.push({ exercise_id: ex.exercise_id, note: (ex.note || '').trim(), rest: ex.rest ?? null, sets });
+      out.push({ exercise_id: ex.exercise_id, note: (ex.note || '').trim(), prescription: ex.prescription || '', distance_unit: ex.distance_unit || '', rest: ex.rest ?? null, sets });
     }
     return out;
   }
@@ -415,7 +504,7 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     if (mode === 'routine') return saveRoutine();
     // Sets that have numbers but no checkmark: ask what to do with them.
-    const unfinished = draft.exercises.flatMap((ex) => ex.sets.filter((s) => !s.done && serverSet(ex.kind, s, units)));
+    const unfinished = draft.exercises.flatMap((ex) => ex.sets.filter((s) => !s.done && serverSet(ex.kind, s, units, ex.distance_unit)));
     if (unfinished.length) {
       const choice = await actionSheet({
         title: `${unfinished.length} set${unfinished.length === 1 ? ' is' : 's are'} not checked off`,
@@ -431,6 +520,16 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
       toast('Check off at least one set first', { kind: 'error' });
       haptic('error');
       return;
+    }
+    let advanceProgram;
+    if (mode === 'active' && draft.program && hasRemainingProgramSets(draft)) {
+      const choice = await actionSheet({
+        title: 'Some planned sets remain',
+        message: 'Save a partial workout to keep this routine up next, or finish it and move to the next workout.',
+        actions: [{ label: 'Save Partial Workout', value: 'partial' }, { label: 'Finish and Move On', value: 'advance' }],
+      });
+      if (choice === null) return;
+      advanceProgram = choice === 'advance';
     }
     const fields = [
       { key: 'title', label: 'Title', value: draft.title || defaultTitle(new Date(draft.started_at)), required: true },
@@ -452,6 +551,7 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     const body = {
       title: result.title, notes: result.notes, started_at: draft.started_at, ended_at: ended,
       routine_id: draft.routine_id || null, exercises,
+      advance_program: advanceProgram,
     };
     saving = true;
     primary.disabled = true;
@@ -483,7 +583,11 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
     saving = true;
     primary.disabled = true;
     try {
-      const body = { name, exercises: payloadExercises({ onlyDone: false }) };
+      const body = {
+        name, notes: draft.notes || '', weekdays: draft.weekdays || [],
+        source_id: draft.source_id || '', source_url: draft.source_url || '',
+        exercises: payloadExercises({ onlyDone: false }),
+      };
       await api(draft.id ? `/api/workout/routines/${draft.id}` : '/api/workout/routines', { method: draft.id ? 'PUT' : 'POST', body });
       haptic('success');
       toast(draft.id ? 'Routine saved' : 'Routine created');
@@ -508,7 +612,7 @@ export function mountLogger(root, ctx, draft, { onDone } = {}) {
 
 // ---- builders for the three modes
 
-export function newActiveDraft({ title = '', routine = null } = {}) {
+export function newActiveDraft({ title = '', routine = null, program = false } = {}) {
   const now = new Date();
   return {
     mode: 'active',
@@ -516,10 +620,14 @@ export function newActiveDraft({ title = '', routine = null } = {}) {
     started_at: now.toISOString(),
     unit: getUnits(),
     routine_id: routine ? routine.id : null,
-    notes: '',
+    program: Boolean(program),
+    planned_exercises: routine ? routine.exercises.map((ex) => ({ exercise_id: ex.exercise_id, sets: Math.max(1, ex.sets.length) })) : [],
+    notes: routine?.notes || '',
+    source_id: routine?.source_id || '',
+    source_url: routine?.source_url || '',
     rest_end: null,
     exercises: routine
-      ? routine.exercises.map((ex) => draftExercise(ex, (ex.sets.length ? ex.sets : [{ kind: 'normal' }]).map((s) => draftSet(s)), ex.rest ?? undefined))
+      ? routine.exercises.map((ex) => draftExercise(ex, (ex.sets.length ? ex.sets : [{ kind: 'normal' }]).map((s) => draftSet(s, false, ex.distance_unit)), ex.rest ?? 0))
       : [],
   };
 }
@@ -533,8 +641,8 @@ export function draftFromSession(session, mode = 'edit') {
     ended_at: session.ended_at,
     unit: getUnits(),
     routine_id: session.routine_id,
-    notes: mode === 'edit' ? session.notes : '',
-    exercises: session.exercises.map((ex) => draftExercise(ex, ex.sets.map((s) => draftSet(s, mode === 'edit')), ex.rest ?? undefined)),
+    notes: mode === 'active' ? '' : session.notes,
+    exercises: session.exercises.map((ex) => draftExercise(ex, ex.sets.map((s) => draftSet(s, mode === 'edit', ex.distance_unit)), ex.rest ?? 0)),
   };
 }
 
@@ -543,9 +651,13 @@ export function draftFromRoutine(routine) {
     mode: 'routine',
     id: routine ? routine.id : null,
     title: routine ? routine.name : '',
+    notes: routine?.notes || '',
+    weekdays: [...(routine?.weekdays || [])],
+    source_id: routine?.source_id || '',
+    source_url: routine?.source_url || '',
     started_at: new Date().toISOString(),
     unit: getUnits(),
-    exercises: routine ? routine.exercises.map((ex) => draftExercise(ex, (ex.sets.length ? ex.sets : [{ kind: 'normal' }]).map((s) => draftSet(s)), ex.rest ?? undefined)) : [],
+    exercises: routine ? routine.exercises.map((ex) => draftExercise(ex, (ex.sets.length ? ex.sets : [{ kind: 'normal' }]).map((s) => draftSet(s, false, ex.distance_unit)), ex.rest ?? 0)) : [],
   };
 }
 

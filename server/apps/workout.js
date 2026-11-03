@@ -15,15 +15,18 @@
 //   GET    /api/workout/exercises/:id/history      -> { exercise, sessions: [{id, title, started_at, sets}], records }
 //   GET    /api/workout/previous?ids=1,2&exclude=<session id> -> { previous: { <exercise id>: [sets of the last workout with it] } }
 //   GET    /api/workout/sessions?before=<started_at ISO>&limit=20 -> { sessions: [session], more }
-//   POST   /api/workout/sessions {title, started_at, ended_at, notes?, routine_id?, exercises} -> 201 { session }
+//   POST   /api/workout/sessions {title, started_at, ended_at, notes?, routine_id?, advance_program?, exercises} -> 201 { session }
 //   GET    /api/workout/sessions/:id               -> { session }
 //   PUT    /api/workout/sessions/:id {same as POST} -> { session }   (replaces the whole workout)
 //   DELETE /api/workout/sessions/:id               -> 204
 //   GET    /api/workout/stats?since=<ISO>          -> { sessions: [{id, started_at, seconds, volume_kg, sets}] }
-//   GET    /api/workout/routines                   -> { routines: [{id, name, exercises: [{exercise_id, name, kind, muscle, rest, sets}], ...}] }
-//   POST   /api/workout/routines {name, exercises} -> 201 { routine }
-//   PUT    /api/workout/routines/:id {name, exercises} -> { routine }
+//   GET    /api/workout/routines                   -> { routines: [routine] }
+//   POST   /api/workout/routines {name, exercises, notes?, weekdays?, source_id?, source_url?} -> 201 { routine }
+//   PUT    /api/workout/routines/:id {same as POST} -> { routine } (omitted metadata is preserved)
 //   DELETE /api/workout/routines/:id               -> 204
+//   GET    /api/workout/program                    -> { program: program | null }
+//   PUT    /api/workout/program {name, routine_ids, cursor?, notes?, source_id?, source_url?, weekdays?, assessments?, source_progress?, prior_completed?} -> { program }
+//   PATCH  /api/workout/program {cursor?, expected_cursor?, expected_updated_at?, weekdays?, assessments?} -> { program }
 //   GET    /api/workout/active                     -> { active: <client draft object> | null, updated_at }
 //   PUT    /api/workout/active {active}            -> { updated_at }
 //   DELETE /api/workout/active                     -> 204
@@ -35,6 +38,29 @@
 // sets are stored. A PR is a best (heaviest weight, best estimated 1RM, best set volume, most
 // reps, longest time, longest distance) beating every earlier workout with that exercise,
 // warm-ups excluded; a first-ever workout with an exercise sets no PR.
+// A routine is {id, name, notes, weekdays, source_id, source_url, exercises, created_at,
+// updated_at}. weekdays is an array of 0 (Sunday) through 6 (Saturday); [] is unscheduled.
+// Exercises stay in array order and may include prescription (exact targets/ranges, max
+// 2000 chars) separately from note and numeric sets. Optional distance_unit is m|yd|km|mi
+// ('' uses the user's display preference); canonical distances always remain in meters.
+// When logging a session, prescription
+// is saved in the exercise note so the original plan remains alongside actual results.
+// A program contains ordered, distinct routine_ids; cursor is the next index (the array
+// length means complete). assessments: [{title, before_index?, items:[{text,done,result?}]}].
+// Assessment result (max 1000 chars) stores measured times/observations separately from
+// the original task text; it defaults to ''.
+// source_progress: [{routine_id, items:[{text,done}]}] is the immutable imported checklist,
+// separate from actual logged sets. completed: [{routine_id,session_id}] is server-owned.
+// prior_completed: [routine_id] records completion confirmed before import, without
+// inventing sessions, dates or sets. It defaults to [].
+// Saving a NEW session for the current routine advances once, atomically with the save.
+// Missing planned sets keep the cursor in place, unless advance_program:true explicitly
+// confirms moving on; false always keeps the cursor. A replay selected as current advances
+// and updates its single completion link. Editing/repeating never advances another routine.
+// PATCH only changes
+// the requested cursor/weekdays/assessments; expected_cursor or expected_updated_at can
+// prevent stale updates (409). updated_at changes on every save, even within one millisecond.
+// weekdays are training-day hints; missed days never skip the next routine.
 import { readJsonBody, sendJson, sendEmpty, HttpError } from '../http.js';
 
 export const KINDS = ['weight', 'reps', 'time', 'cardio'];
@@ -194,6 +220,18 @@ export default {
         ${SEED_SQL}
       `,
     },
+    {
+      id: 'workout-2',
+      sql: `CREATE TABLE IF NOT EXISTS workout_program (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );`,
+    },
+    {
+      id: 'workout-3',
+      sql: "ALTER TABLE workout_entries ADD COLUMN distance_unit TEXT NOT NULL DEFAULT '';",
+    },
   ],
   register(r, ctx) {
     const repo = workoutRepo(ctx.db);
@@ -306,14 +344,43 @@ export default {
 
     r.put('/api/workout/routines/:id', async (req, res, { params }) => {
       const id = parseId(params.id);
-      if (!repo.routine(id)) throw new HttpError(404, 'routine not found');
-      const input = validateRoutine(await readJsonBody(req, { limit: 256 * 1024 }), repo);
+      const existing = repo.routine(id);
+      if (!existing) throw new HttpError(404, 'routine not found');
+      const input = validateRoutine(await readJsonBody(req, { limit: 256 * 1024 }), repo, existing);
       return { routine: repo.saveRoutine(id, input) };
     });
 
     r.delete('/api/workout/routines/:id', (req, res, { params }) => {
-      if (!repo.deleteRoutine(parseId(params.id))) throw new HttpError(404, 'routine not found');
+      const id = parseId(params.id);
+      if (repo.program()?.routine_ids.includes(id)) throw new HttpError(409, 'this routine belongs to your program');
+      if (!repo.deleteRoutine(id)) throw new HttpError(404, 'routine not found');
       sendEmpty(res, 204);
+    });
+
+    // ---- one ordered training program, with source progress kept separate from logs
+    r.get('/api/workout/program', () => ({ program: repo.program() }));
+    r.put('/api/workout/program', async (req) => {
+      const body = await readJsonBody(req, { limit: 2 * 1024 * 1024 });
+      const input = validateProgram(body, repo, repo.program());
+      return { program: repo.saveProgram(input) };
+    });
+    r.patch('/api/workout/program', async (req) => {
+      const body = await readJsonBody(req, { limit: 512 * 1024 });
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
+      if (Object.keys(body).some((key) => !['cursor', 'expected_cursor', 'expected_updated_at', 'weekdays', 'assessments'].includes(key))) {
+        throw new HttpError(400, 'PATCH only accepts cursor, expected_cursor, expected_updated_at, weekdays and assessments');
+      }
+      const current = repo.program();
+      if (!current) throw new HttpError(404, 'program not found');
+      if (body.expected_cursor !== undefined && body.expected_cursor !== current.cursor) {
+        throw new HttpError(409, 'your program position changed; refresh and try again');
+      }
+      if (body.expected_updated_at !== undefined) {
+        if (typeof body.expected_updated_at !== 'string') throw new HttpError(400, 'expected_updated_at must be a string');
+        if (body.expected_updated_at !== current.updated_at) throw new HttpError(409, 'your program changed; refresh and try again');
+      }
+      const input = validateProgram({ ...current, ...body }, repo, current);
+      return { program: repo.saveProgram(input) };
     });
 
     // ---- the workout in progress (opaque client JSON)
@@ -397,9 +464,14 @@ function validateExerciseList(list, repo, { allowEmptySets }) {
     if (raw.sets.length > MAX_SETS) throw new HttpError(400, `${where}: at most ${MAX_SETS} sets`);
     if (!allowEmptySets && !raw.sets.length) throw new HttpError(400, `${where} has no sets`);
     const rest = raw.rest === undefined || raw.rest === null ? null : num(raw.rest, `${where}.rest`, { max: 1800, integer: true });
+    const prescription = text(raw.prescription, `${where}.prescription`, { max: 2000 });
+    const note = text(raw.note, `${where}.note`, { max: allowEmptySets ? 1000 : 7000 });
+    const sessionNote = prescription ? [`Prescription: ${prescription}`, note].filter(Boolean).join('\n\n') : note;
     return {
       exercise_id: exerciseId,
-      note: text(raw.note, `${where}.note`, { max: 1000 }),
+      note: allowEmptySets ? note : text(sessionNote, `${where}.note`, { max: 7000 }),
+      ...(allowEmptySets ? { prescription } : {}),
+      distance_unit: oneOf(raw.distance_unit ?? '', ['', 'm', 'yd', 'km', 'mi'], `${where}.distance_unit`),
       rest,
       sets: raw.sets.map((s, j) => validateSet(s, `${where}.sets[${j}]`)),
     };
@@ -414,21 +486,118 @@ function validateSession(body, repo) {
   const exercises = validateExerciseList(body.exercises, repo, { allowEmptySets: false });
   if (!exercises.length) throw new HttpError(400, 'a workout needs at least one exercise');
   const routineId = body.routine_id === undefined || body.routine_id === null ? null : Number(body.routine_id);
+  if (body.advance_program !== undefined && typeof body.advance_program !== 'boolean') throw new HttpError(400, 'advance_program must be true or false');
   return {
     title: text(body.title, 'title', { max: 100 }) || 'Workout',
     notes: text(body.notes, 'notes', { max: 4000 }),
     routine_id: Number.isSafeInteger(routineId) && routineId > 0 ? routineId : null,
+    advance_program: body.advance_program,
     started_at: startedAt,
     ended_at: endedAt,
     exercises,
   };
 }
 
-function validateRoutine(body, repo) {
+function validateRoutine(body, repo, existing = null) {
   if (!body || typeof body !== 'object') throw new HttpError(400, 'body must be an object');
+  const value = (key, fallback) => body[key] === undefined ? (existing?.[key] ?? fallback) : body[key];
+  const weekdays = value('weekdays', []);
+  if (!Array.isArray(weekdays) || weekdays.length > 7 || weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+    throw new HttpError(400, 'weekdays must be an array of day numbers from 0 (Sunday) to 6 (Saturday)');
+  }
+  const sourceUrl = text(value('source_url', ''), 'source_url', { max: 2000 });
+  if (sourceUrl) {
+    let parsed;
+    try { parsed = new URL(sourceUrl); } catch { /* rejected below */ }
+    if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) throw new HttpError(400, 'source_url must be an http or https URL');
+  }
+  // Older clients only know about numeric sets. Keep the prescription for the same
+  // occurrence of an exercise if they save it without the new field.
+  const prior = new Map();
+  for (const ex of existing?.exercises || []) {
+    if (!prior.has(ex.exercise_id)) prior.set(ex.exercise_id, []);
+    prior.get(ex.exercise_id).push({ prescription: ex.prescription || '', distance_unit: ex.distance_unit || '' });
+  }
+  const exercises = Array.isArray(body.exercises) ? body.exercises.map((ex) => {
+    const previous = prior.get(Number(ex?.exercise_id))?.shift() || {};
+    return ex && typeof ex === 'object' ? {
+      ...ex,
+      prescription: ex.prescription === undefined ? (previous.prescription || '') : ex.prescription,
+      distance_unit: ex.distance_unit === undefined ? (previous.distance_unit || '') : ex.distance_unit,
+    } : ex;
+  }) : body.exercises;
   return {
     name: text(body.name, 'name', { max: 100, required: true }),
-    exercises: validateExerciseList(body.exercises, repo, { allowEmptySets: true }),
+    notes: text(value('notes', ''), 'notes', { max: 4000 }),
+    weekdays: [...new Set(weekdays)].sort((a, b) => a - b),
+    source_id: text(value('source_id', ''), 'source_id', { max: 200 }),
+    source_url: sourceUrl,
+    exercises: validateExerciseList(exercises, repo, { allowEmptySets: true }),
+  };
+}
+
+function validateProgram(body, repo, existing = null) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
+  const value = (key, fallback) => body[key] === undefined ? (existing?.[key] ?? fallback) : body[key];
+  const routineIds = value('routine_ids', []);
+  if (!Array.isArray(routineIds) || !routineIds.length || routineIds.length > 200 ||
+      routineIds.some((id) => !Number.isSafeInteger(id) || !repo.routine(id)) || new Set(routineIds).size !== routineIds.length) {
+    throw new HttpError(400, 'routine_ids must contain 1 to 200 distinct existing routine IDs in order');
+  }
+  const cursor = value('cursor', 0);
+  if (!Number.isInteger(cursor) || cursor < 0 || cursor > routineIds.length) throw new HttpError(400, 'cursor must be an index from 0 through the program length');
+  const priorCompleted = value('prior_completed', []);
+  if (!Array.isArray(priorCompleted) || priorCompleted.some((id) => !Number.isSafeInteger(id) || !routineIds.includes(id)) || new Set(priorCompleted).size !== priorCompleted.length) {
+    throw new HttpError(400, 'prior_completed must be distinct routine IDs belonging to this program');
+  }
+  const weekdays = value('weekdays', []);
+  if (!Array.isArray(weekdays) || weekdays.length > 7 || weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+    throw new HttpError(400, 'weekdays must be an array of day numbers from 0 (Sunday) to 6 (Saturday)');
+  }
+  const sourceUrl = text(value('source_url', ''), 'source_url', { max: 2000 });
+  if (sourceUrl) {
+    let parsed;
+    try { parsed = new URL(sourceUrl); } catch { /* rejected below */ }
+    if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) throw new HttpError(400, 'source_url must be an http or https URL');
+  }
+  function checklist(items, where, { results = false } = {}) {
+    if (!Array.isArray(items) || items.length > 200) throw new HttpError(400, `${where} must be an array of at most 200 items`);
+    return items.map((item, i) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new HttpError(400, `${where}[${i}] must be an object`);
+      if (typeof item.done !== 'boolean') throw new HttpError(400, `${where}[${i}].done must be true or false`);
+      return {
+        text: text(item.text, `${where}[${i}].text`, { max: 4000, required: true }), done: item.done,
+        ...(results ? { result: text(item.result, `${where}[${i}].result`, { max: 1000 }) } : {}),
+      };
+    });
+  }
+  const assessmentInput = value('assessments', []);
+  if (!Array.isArray(assessmentInput) || assessmentInput.length > 60) throw new HttpError(400, 'assessments must be an array of at most 60 groups');
+  const assessments = assessmentInput.map((group, i) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) throw new HttpError(400, `assessments[${i}] must be an object`);
+    const before = group.before_index;
+    if (before !== undefined && (!Number.isInteger(before) || before < 0 || before > routineIds.length)) throw new HttpError(400, `assessments[${i}].before_index is out of range`);
+    return {
+      title: text(group.title, `assessments[${i}].title`, { max: 200, required: true }),
+      ...(before === undefined ? {} : { before_index: before }),
+      items: checklist(group.items, `assessments[${i}].items`, { results: true }),
+    };
+  });
+  const progressInput = value('source_progress', []);
+  if (!Array.isArray(progressInput) || progressInput.length > 200) throw new HttpError(400, 'source_progress must be an array of at most 200 groups');
+  const sourceProgress = progressInput.map((group, i) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group) || !routineIds.includes(group.routine_id)) throw new HttpError(400, `source_progress[${i}].routine_id must belong to the program`);
+    return { routine_id: group.routine_id, items: checklist(group.items, `source_progress[${i}].items`) };
+  });
+  if (new Set(sourceProgress.map((group) => group.routine_id)).size !== sourceProgress.length) throw new HttpError(400, 'source_progress must have at most one group per routine');
+  if (existing && JSON.stringify(sourceProgress) !== JSON.stringify(existing.source_progress)) throw new HttpError(409, 'imported source_progress cannot be changed');
+  if (existing?.completed.some((item) => !routineIds.includes(item.routine_id))) throw new HttpError(409, 'cannot remove completed routines from the program');
+  return {
+    name: text(value('name', ''), 'name', { max: 200, required: true }),
+    notes: text(value('notes', ''), 'notes', { max: 20000 }),
+    source_id: text(value('source_id', ''), 'source_id', { max: 200 }), source_url: sourceUrl,
+    weekdays: [...new Set(weekdays)].sort((a, b) => a - b), cursor, routine_ids: [...routineIds],
+    assessments, source_progress: sourceProgress, prior_completed: [...priorCompleted], completed: existing?.completed || [],
   };
 }
 
@@ -503,7 +672,7 @@ function workoutRepo(db) {
   const sessionUpdate = db.prepare('UPDATE workout_sessions SET title = ?, notes = ?, routine_id = ?, started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?');
   const sessionDelete = db.prepare('DELETE FROM workout_sessions WHERE id = ?');
   const entriesFor = db.prepare('SELECT * FROM workout_entries WHERE session_id = ? ORDER BY position');
-  const entryInsert = db.prepare('INSERT INTO workout_entries (session_id, exercise_id, position, note, rest) VALUES (?, ?, ?, ?, ?)');
+  const entryInsert = db.prepare('INSERT INTO workout_entries (session_id, exercise_id, position, note, rest, distance_unit) VALUES (?, ?, ?, ?, ?, ?)');
   const entriesDelete = db.prepare('DELETE FROM workout_entries WHERE session_id = ?');
   const setsFor = db.prepare('SELECT * FROM workout_sets WHERE session_id = ? ORDER BY entry_id, position');
   const setInsert = db.prepare('INSERT INTO workout_sets (entry_id, session_id, exercise_id, position, kind, weight_kg, reps, seconds, meters) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -537,6 +706,26 @@ function workoutRepo(db) {
   const activeGet = db.prepare('SELECT * FROM workout_active WHERE id = 1');
   const activeSet = db.prepare('INSERT INTO workout_active (id, data, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at');
   const activeDelete = db.prepare('DELETE FROM workout_active');
+  const programGet = db.prepare('SELECT * FROM workout_program WHERE id = 1');
+  const programSet = db.prepare('INSERT INTO workout_program (id, data, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at');
+
+  function program() {
+    const row = programGet.get();
+    if (!row) return null;
+    const data = JSON.parse(row.data);
+    const assessments = (data.assessments || []).map((group) => ({
+      ...group, items: group.items.map((item) => ({ ...item, result: item.result || '' })),
+    }));
+    return { ...data, assessments, prior_completed: data.prior_completed || [], updated_at: row.updated_at };
+  }
+
+  function saveProgram(input) {
+    const { updated_at, expected_cursor, expected_updated_at, ...data } = input;
+    const previousMs = Date.parse(programGet.get()?.updated_at || '') || 0;
+    const stamp = new Date(Math.max(Date.now(), previousMs + 1)).toISOString();
+    programSet.run(JSON.stringify(data), stamp);
+    return program();
+  }
 
   const setRow = (s) => ({
     kind: s.kind,
@@ -591,7 +780,7 @@ function workoutRepo(db) {
       const ex = exOf(Number(en.exercise_id)) || { name: 'Deleted exercise', kind: 'weight', muscle: 'Other', equipment: 'Other' };
       return {
         exercise_id: Number(en.exercise_id), name: ex.name, kind: ex.kind, muscle: ex.muscle, equipment: ex.equipment,
-        note: en.note, rest: en.rest === null ? null : Number(en.rest), sets: byEntry.get(Number(en.id)) || [],
+        note: en.note, rest: en.rest === null ? null : Number(en.rest), distance_unit: en.distance_unit || '', sets: byEntry.get(Number(en.id)) || [],
       };
     });
     let volume = 0;
@@ -615,9 +804,13 @@ function workoutRepo(db) {
     try { data = JSON.parse(row.data); } catch { /* keep empty */ }
     const exercises = (data.exercises || []).map((en) => {
       const ex = exercise(en.exercise_id);
-      return ex ? { ...en, name: ex.name, kind: ex.kind, muscle: ex.muscle, equipment: ex.equipment } : null;
+      return ex ? { ...en, prescription: en.prescription || '', distance_unit: en.distance_unit || '', name: ex.name, kind: ex.kind, muscle: ex.muscle, equipment: ex.equipment } : null;
     }).filter(Boolean);
-    return { id: Number(row.id), name: row.name, exercises, created_at: row.created_at, updated_at: row.updated_at };
+    return {
+      id: Number(row.id), name: row.name, notes: data.notes || '', weekdays: data.weekdays || [],
+      source_id: data.source_id || '', source_url: data.source_url || '', exercises,
+      created_at: row.created_at, updated_at: row.updated_at,
+    };
   }
 
   return {
@@ -671,9 +864,25 @@ function workoutRepo(db) {
           sid = Number(sessionInsert.run(input.title, input.notes, input.routine_id, input.started_at, input.ended_at, ts, ts).lastInsertRowid);
         }
         input.exercises.forEach((ex, i) => {
-          const entryId = Number(entryInsert.run(sid, ex.exercise_id, i, ex.note, ex.rest).lastInsertRowid);
+          const entryId = Number(entryInsert.run(sid, ex.exercise_id, i, ex.note, ex.rest, ex.distance_unit).lastInsertRowid);
           ex.sets.forEach((s, j) => setInsert.run(entryId, sid, ex.exercise_id, j, s.kind, s.weight_kg, s.reps, s.seconds, s.meters));
         });
+        if (!id) {
+          const current = program();
+          if (current && current.routine_ids[current.cursor] === input.routine_id && input.advance_program !== false) {
+            const routine = routineOut(routineGet.get(input.routine_id));
+            const logged = new Map();
+            for (const ex of input.exercises) logged.set(ex.exercise_id, (logged.get(ex.exercise_id) || 0) + ex.sets.length);
+            const planned = new Map();
+            for (const ex of routine.exercises) planned.set(ex.exercise_id, (planned.get(ex.exercise_id) || 0) + Math.max(1, ex.sets.length));
+            const coversPlan = [...planned].every(([exerciseId, count]) => (logged.get(exerciseId) || 0) >= count);
+            if (input.advance_program !== true && !coversPlan) return sid;
+            current.completed = current.completed.filter((item) => item.routine_id !== input.routine_id);
+            current.completed.push({ routine_id: input.routine_id, session_id: sid });
+            current.cursor += 1;
+            saveProgram(current);
+          }
+        }
         return sid;
       });
       return this.session(sessionId);
@@ -682,7 +891,13 @@ function workoutRepo(db) {
       return tx(() => {
         setsDelete.run(id);
         entriesDelete.run(id);
-        return Number(sessionDelete.run(id).changes) > 0;
+        const deleted = Number(sessionDelete.run(id).changes) > 0;
+        const current = program();
+        if (deleted && current?.completed.some((item) => item.session_id === id)) {
+          current.completed = current.completed.filter((item) => item.session_id !== id);
+          saveProgram(current);
+        }
+        return deleted;
       });
     },
     stats: (since) => statsStmt.all(since).map((row) => ({
@@ -696,7 +911,10 @@ function workoutRepo(db) {
       return row ? routineOut(row) : null;
     },
     saveRoutine(id, input) {
-      const data = JSON.stringify({ exercises: input.exercises });
+      const data = JSON.stringify({
+        exercises: input.exercises, notes: input.notes, weekdays: input.weekdays,
+        source_id: input.source_id, source_url: input.source_url,
+      });
       const ts = now();
       let rid = id;
       if (rid) routineUpdate.run(input.name, data, ts, rid);
@@ -704,6 +922,8 @@ function workoutRepo(db) {
       return this.routine(rid);
     },
     deleteRoutine: (id) => Number(routineDelete.run(id).changes) > 0,
+    program,
+    saveProgram,
     active() {
       const row = activeGet.get();
       if (!row) return { active: null, updated_at: null };

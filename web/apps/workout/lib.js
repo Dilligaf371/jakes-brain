@@ -16,6 +16,10 @@ export const DEFAULT_REST = 90;
 let units = store.get('workout.units', 'lb') === 'kg' ? 'kg' : 'lb';
 export const getUnits = () => units;
 export const distUnit = () => (units === 'kg' ? 'km' : 'mi');
+const DISTANCE_METERS = { m: 1, yd: 0.9144, km: 1000, mi: M_PER_MI };
+export const distanceUnit = (unit, weightUnit = units) => Object.hasOwn(DISTANCE_METERS, unit) ? unit : (weightUnit === 'kg' ? 'km' : 'mi');
+export const metersToDistance = (meters, unit, weightUnit = units) => meters / DISTANCE_METERS[distanceUnit(unit, weightUnit)];
+export const distanceToMeters = (distance, unit, weightUnit = units) => distance * DISTANCE_METERS[distanceUnit(unit, weightUnit)];
 
 export async function loadUnits() {
   try {
@@ -86,7 +90,7 @@ export function clockToSeconds(text) {
 }
 
 // One set as short text: "135 lb × 8", "× 12", "1:30", "1.5 mi · 12:00"
-export function setText(kind, s) {
+export function setText(kind, s, exerciseDistanceUnit = '') {
   if (kind === 'weight') {
     const w = s.weight_kg ? `${fmtWeight(s.weight_kg)} ${units}` : '';
     return w ? `${w} × ${s.reps ?? 0}` : `${s.reps ?? 0} reps`;
@@ -94,7 +98,7 @@ export function setText(kind, s) {
   if (kind === 'reps') return `${s.reps ?? 0} reps`;
   if (kind === 'time') return fmtClock(s.seconds || 0);
   const parts = [];
-  if (s.meters) parts.push(`${fmtDist(s.meters)} ${distUnit()}`);
+  if (s.meters) parts.push(`${trim(metersToDistance(s.meters, exerciseDistanceUnit), 2)} ${distanceUnit(exerciseDistanceUnit)}`);
   if (s.seconds) parts.push(fmtClock(s.seconds));
   return parts.join(' · ') || '—';
 }
@@ -157,20 +161,25 @@ export function blankSet(kind = 'normal') {
 }
 
 // Server set (kg / m / s) -> draft set (strings in the current units)
-export function draftSet(s, done = false) {
+export function draftSet(s, done = false, exerciseDistanceUnit = '') {
+  // Short history labels may round distances; editable targets must round-trip exactly.
+  const distance = s.meters === null || s.meters === undefined ? '' : trim(metersToDistance(s.meters, exerciseDistanceUnit), 6);
   return {
     uid: uid(),
     kind: s.kind || 'normal',
     w: s.weight_kg ? fmtWeight(s.weight_kg) : '',
     r: s.reps === null || s.reps === undefined ? '' : String(s.reps),
     t: s.seconds ? fmtClock(s.seconds) : '',
-    d: s.meters ? fmtDist(s.meters) : '',
+    d: distance,
+    d_source: distance,
+    d_unit_source: distanceUnit(exerciseDistanceUnit),
+    meters_source: s.meters ?? null,
     done,
   };
 }
 
 // Draft set -> server set, or null when it has nothing in it.
-export function serverSet(kind, s, u) {
+export function serverSet(kind, s, u, exerciseDistanceUnit = '') {
   const n = (v) => {
     const x = Number(String(v).replace(',', '.'));
     return v === '' || !Number.isFinite(x) || x < 0 ? null : x;
@@ -189,7 +198,8 @@ export function serverSet(kind, s, u) {
     if (!out.seconds) return null;
   } else {
     const d = n(s.d);
-    out.meters = d === null ? null : Math.round(toMeters(d, u) * 10) / 10;
+    out.meters = d === null ? null : s.d === s.d_source && s.d_unit_source === distanceUnit(exerciseDistanceUnit, u) && typeof s.meters_source === 'number'
+      ? s.meters_source : Math.round(distanceToMeters(d, exerciseDistanceUnit, u) * 1000) / 1000;
     out.seconds = clockToSeconds(s.t);
     if (!out.meters && !out.seconds) return null;
   }
@@ -205,6 +215,8 @@ export function draftExercise(ex, sets, rest) {
     muscle: ex.muscle,
     rest: rest !== undefined ? rest : (ex.kind === 'cardio' ? 0 : DEFAULT_REST),
     note: ex.note || '',
+    prescription: ex.prescription || '',
+    distance_unit: ex.distance_unit || '',
     sets,
   };
 }

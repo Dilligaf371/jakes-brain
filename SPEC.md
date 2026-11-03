@@ -424,6 +424,19 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
   cards) · Exercises (library). The logger (`#/workout/active`) has a set table per exercise
   (SET · PREVIOUS · weight/reps/time/distance · check), set types (warm-up, drop, failure), a rest
   timer bar, Finish → saved workout with new records. Workouts can be edited, repeated, saved as routines.
+- Routines also preserve instructions, optional weekdays, source IDs/links and exact exercise
+  prescriptions independently from numeric set targets. Ranges, alternatives and circuit instructions
+  stay readable when logging. Only checked sets become recorded workout results.
+- Migration `workout-2` adds an optional ordered program. `GET/PUT /api/workout/program` reads or
+  imports the program; `PATCH` updates its position, training weekdays or assessment results.
+  Routine IDs are ordered; the program opens to the next workout and supports previewing any
+  workout without changing position. Optional training days are hints and never skip missed workouts.
+- Original imported checklists, confirmed completions before import, and dated workouts logged in
+  the app remain separate. Source checklists are immutable snapshots. Assessment results are editable.
+  Saving a completed program workout advances its position atomically; saving a partial workout
+  can retain the current position. The existing active workout survives program import.
+- Personal program imports and source exports belong in the data directory or an external migration
+  workspace, never committed to this repository. The module header documents the exact API contract.
 
 ### food  (added 2026-11-02 — "my calorie tracker, instead of Notion")
 - Tile: id `food`, label "Food", colour #ca8a04, glyph = fork and knife.

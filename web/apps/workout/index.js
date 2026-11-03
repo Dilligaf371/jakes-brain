@@ -12,6 +12,7 @@ import { formSheet } from '../../form.js';
 import { barChart, lineChart } from './charts.js';
 import { mountLogger, newActiveDraft, draftFromSession, draftFromRoutine } from './logger.js';
 import { createExercise } from './picker.js';
+import { programView } from './program.js';
 import {
   getUnits, setUnits, loadUnits, fmtVolume, fmtLong, fmtClock, fmtWeight, fmtDist, distUnit, setText, setLabels,
   e1rm, PR_LABELS, prValue, loadLibrary, cachedLibrary, MUSCLES, EQUIPMENT, KIND_LABELS,
@@ -122,6 +123,11 @@ async function startWorkout(draft) {
 async function workoutTab(body, alive) {
   let active = readActive();
   let routines = null;
+  let sessions = [];
+  let program = null;
+  let previewIndex = null;
+  let selectedDay = fmt.dayKey();
+  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const draw = () => {
     if (!alive()) return;
     const out = [];
@@ -133,15 +139,25 @@ async function workoutTab(body, alive) {
           el('span', { class: 'wo-active-title', text: 'Workout in progress' }),
           el('span', { class: 'muted', text: `${active.title || 'Workout'} · ${fmtLong((Date.now() - Date.parse(active.started_at)) / 1000)} · ${done} set${done === 1 ? '' : 's'}` })),
         el('span', { class: 'wo-resume', text: 'Resume' })));
-    } else {
-      out.push(el('button', { type: 'button', class: 'wo-btn wo-btn-primary', 'on:click': () => startWorkout(newActiveDraft()) },
-        icon('plus', { size: 20 }), el('span', { text: 'Start Empty Workout' })));
     }
+    if (program && routines) out.push(programView({
+      program, routines, active, previewIndex, nav: ctx.nav,
+      onPreview: (index) => { previewIndex = index; draw(); },
+      onChange: (updated) => { program = updated; draw(); },
+      onStart: (routine) => startWorkout(newActiveDraft({ routine, program: true })),
+    }));
+    else if (routines?.some((r) => r.weekdays?.length)) out.push(todayPlan());
+    if (!active) out.push(el('button', { type: 'button', class: 'wo-btn wo-btn-secondary', 'on:click': () => startWorkout(newActiveDraft()) },
+      icon('plus', { size: 20 }), el('span', { text: 'Start Empty Workout' })));
     out.push(el('div', { class: 'wo-section-row' }, section('Routines'),
       el('button', { type: 'button', class: 'wo-link', text: 'New Routine', 'on:click': () => ctx.nav.go('#/workout/r/new') })));
     if (routines === null) out.push(loading());
     else if (!routines.length) out.push(emptyState('No routines yet. Save a workout as a routine, or tap New Routine.'));
-    else out.push(...routines.map(routineCard));
+    else {
+      const otherRoutines = routines.filter((r) => !program?.routine_ids.includes(r.id));
+      out.push(...otherRoutines.map(routineCard));
+      if (!otherRoutines.length && program) out.push(el('p', { class: 'muted wo-plan-note', text: 'All program workouts are available in the selector above.' }));
+    }
     out.push(section('Units'), el('div', { class: 'card wo-units' },
       el('span', { text: 'Weight' }),
       el('div', { class: 'segmented' }, ...['lb', 'kg'].map((u) => el('button', {
@@ -151,11 +167,62 @@ async function workoutTab(body, alive) {
     body.replaceChildren(...out);
   };
 
+  function todayPlan() {
+    const today = new Date();
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7), 12);
+    const selected = new Date(`${selectedDay}T12:00:00`);
+    const planned = routines.filter((r) => r.weekdays?.includes(selected.getDay()));
+    const week = el('div', { class: 'wo-week', role: 'group', 'aria-label': 'Training days this week' },
+      ...Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(monday); date.setDate(date.getDate() + i);
+        const key = fmt.dayKey(date);
+        const scheduled = routines.some((r) => r.weekdays?.includes(date.getDay()));
+        return el('button', {
+          type: 'button', class: `wo-day${scheduled ? ' scheduled' : ''}${key === fmt.dayKey(today) ? ' today' : ''}`,
+          'aria-pressed': String(key === selectedDay), 'aria-label': `${fmt.date(date, { weekday: 'long' })}${scheduled ? ', workout scheduled' : ', no workout scheduled'}`,
+          'on:click': () => { selectedDay = key; draw(); },
+        }, el('span', { text: weekdayNames[date.getDay()] }), el('strong', { text: String(date.getDate()) }), el('span', { class: 'wo-day-dot', 'aria-hidden': 'true' }));
+      }));
+    const cards = planned.map((routine) => {
+      const completed = sessions.find((s) => s.routine_id === routine.id && fmt.dayKey(s.started_at) === selectedDay);
+      const inProgress = active?.routine_id === routine.id;
+      return el('section', { class: 'card wo-plan' },
+        el('div', { class: 'wo-plan-heading' },
+          el('h2', { text: routine.name }),
+          completed ? el('span', { class: 'wo-plan-complete', text: 'Complete' }) : null),
+        el('div', { class: 'muted wo-plan-meta', text: `${routine.exercises.length} exercises · ${routine.exercises.reduce((n, e) => n + e.sets.length, 0)} sets` }),
+        routine.notes ? el('details', { class: 'wo-program-notes' }, el('summary', { text: 'Program notes' }), el('p', { text: routine.notes })) : null,
+        el('ol', { class: 'wo-plan-exercises' }, ...routine.exercises.map((ex) =>
+          el('li', {}, el('div', { class: 'wo-plan-ex-name', text: ex.name }),
+            el('div', { class: 'wo-plan-prescription', text: ex.prescription || targetSummary(ex) }),
+            ex.note ? el('div', { class: 'muted wo-plan-note', text: ex.note }) : null,
+            ex.rest ? el('div', { class: 'muted wo-plan-rest', text: `Rest ${fmtClock(ex.rest)}` }) : null))),
+        el('button', {
+          type: 'button', class: 'wo-btn wo-btn-primary',
+          text: inProgress ? 'Resume Workout' : completed ? 'View Completed Workout' : 'Start Workout',
+          'on:click': () => inProgress ? ctx.nav.go('#/workout/active') : completed ? ctx.nav.go(`#/workout/s/${completed.id}`) : startWorkout(newActiveDraft({ routine })),
+        }),
+        routine.source_url ? el('a', { class: 'wo-plan-source', href: routine.source_url, target: '_blank', rel: 'noopener noreferrer', text: 'Original plan in Notion' }) : null);
+    });
+    return el('div', { class: 'wo-daily-plan' },
+      el('div', { class: 'wo-section-row' }, section(selectedDay === fmt.dayKey(today) ? 'Today’s plan' : fmt.date(selected, { weekday: 'long' })),
+        selectedDay !== fmt.dayKey(today) ? el('button', { type: 'button', class: 'wo-link', text: 'Today', 'on:click': () => { selectedDay = fmt.dayKey(); draw(); } }) : null),
+      week,
+      ...(cards.length ? cards : [el('div', { class: 'card wo-plan' }, el('h2', { text: 'No workout scheduled' }), el('p', { class: 'muted', text: 'Your other routines are below.' }))]));
+  }
+
+  function targetSummary(ex) {
+    if (!ex.sets.length) return 'No target sets';
+    const targets = ex.sets.map((s) => [s.weight_kg, s.reps, s.seconds, s.meters].some((v) => v != null) ? setText(ex.kind, s, ex.distance_unit) : 'Log your set');
+    return targets.every((s) => s === targets[0]) ? `${targets.length} × ${targets[0]}` : targets.map((s, i) => `${i + 1}: ${s}`).join(' · ');
+  }
+
   function routineCard(r) {
     return el('div', { class: 'card wo-routine' },
       el('div', { class: 'wo-routine-head' },
         el('div', { class: 'wo-routine-name', text: r.name }),
         el('button', { type: 'button', class: 'wo-ex-more', 'aria-label': `Options for ${r.name}`, 'on:click': () => routineMenu(r) }, icon('more'))),
+      r.weekdays?.length ? el('div', { class: 'wo-routine-days', text: r.weekdays.map((d) => weekdayNames[d]).join(' · ') }) : null,
       el('div', { class: 'wo-routine-list muted', text: r.exercises.map((e) => e.name).join(', ') || 'No exercises' }),
       el('button', { type: 'button', class: 'wo-btn wo-btn-primary wo-btn-small', text: 'Start Routine', 'on:click': () => startWorkout(newActiveDraft({ routine: r })) }));
   }
@@ -178,9 +245,12 @@ async function workoutTab(body, alive) {
   draw();
   const tick = setInterval(() => { if (active) draw(); }, 30000);
   cleanupView = () => clearInterval(tick);
-  const [synced, data] = await Promise.all([syncActive(), api('/api/workout/routines').catch((err) => ({ err }))]);
+  const [synced, data, history, programData] = await Promise.all([syncActive(), api('/api/workout/routines').catch((err) => ({ err })), api('/api/workout/sessions?limit=50').catch(() => null), api('/api/workout/program').catch((err) => ({ err }))]);
   if (!alive()) return;
   active = synced;
+  sessions = history?.sessions || [];
+  program = programData.program || null;
+  if (programData.err && programData.err.status !== 404) toast(errText(programData.err, 'load program'), { kind: 'error' });
   if (data.err) {
     routines = [];
     toast(errText(data.err), { kind: 'error' });
@@ -352,6 +422,7 @@ async function routineView(id, alive) {
     if (fromSession) {
       draft.title = fromSession.name;
       draft.exercises = fromSession.exercises;
+      draft.notes = fromSession.notes || '';
     }
     cleanupView = mountLogger(root, ctx, draft);
     return;
@@ -403,7 +474,7 @@ async function sessionView(id, isNew, alive) {
     if (choice === 'routine') {
       const seed = draftFromSession(session, 'routine');
       for (const ex of seed.exercises) for (const s of ex.sets) s.done = false;
-      store.set('workout.routineSeed', { name: session.title, exercises: seed.exercises });
+      store.set('workout.routineSeed', { name: session.title, notes: seed.notes, exercises: seed.exercises });
       ctx.nav.go('#/workout/r/new');
     }
     if (choice === 'delete') {
@@ -450,7 +521,7 @@ async function sessionView(id, isNew, alive) {
       ex.note ? el('div', { class: 'muted wo-detail-note', text: ex.note }) : null,
       ...ex.sets.map((s, i) => el('div', { class: 'wo-detail-set' },
         el('span', { class: `wo-set-label k-${s.kind}`, text: labels[i] }),
-        el('span', { text: setText(ex.kind, s) }),
+        el('span', { text: setText(ex.kind, s, ex.distance_unit) }),
         ex.kind === 'weight' && s.weight_kg && s.reps ? el('span', { class: 'muted wo-e1rm', text: `1RM ${fmtWeight(e1rm(s.weight_kg, s.reps))}` }) : null))));
   }
   content.replaceChildren(...out);
@@ -579,7 +650,7 @@ async function exerciseView(id, alive) {
       el('div', { class: 'wo-hist-head' }, el('span', { class: 'wo-hist-title', text: s.title }), el('span', { class: 'muted', text: fmt.date(s.started_at) })),
       ...s.sets.map((x, i) => el('div', { class: 'wo-detail-set' },
         el('span', { class: `wo-set-label k-${x.kind}`, text: labels[i] }),
-        el('span', { text: setText(ex.kind, x) })))));
+        el('span', { text: setText(ex.kind, x, ex.distance_unit) })))));
   }
   content.replaceChildren(...out);
 }
