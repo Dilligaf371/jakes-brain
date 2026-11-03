@@ -93,6 +93,17 @@ function markOnline() {
 
 // ---------------------------------------------------------------- api
 
+function requireSignIn(response) {
+  const login = response.headers ? response.headers.get('X-JakesData-Sign-In') : response.getResponseHeader('X-JakesData-Sign-In');
+  if (response.status !== 401 || login !== '/app-login' || document.getElementById('signin-banner')) return;
+  const button = el('button', { type: 'button', text: 'Sign in', 'on:click': async () => {
+    if (reloadHeld() && !await confirmSheet({ title: 'Sign in again?', message: 'This reloads the app. Finish or copy any unsaved edits first.', confirmLabel: 'Sign in' })) return;
+    location.assign('/app-login' + location.hash);
+  } });
+  document.body.append(el('div', { id: 'signin-banner', class: 'signin-banner', role: 'alert' },
+    el('span', { text: 'Sign in again to save changes.' }), button));
+}
+
 // JSON in/out over relative /api paths. Every call is bounded by `timeout`. Throws ApiError:
 //   status 0   'network' | 'timeout' | 'aborted' (the PC is unreachable; the banner shows)
 //   status n   the server's { error } message (or "HTTP n")
@@ -132,6 +143,7 @@ export async function api(path, { method = 'GET', body, timeout = FETCH_TIMEOUT_
       throw new ApiError(timedOut ? 'timeout' : 'network', 0);
     }
     markOnline(); // any answer at all means the PC is reachable
+    requireSignIn(res);
     if (raw) {
       clearTimeout(timer);
       keepListener = true;
@@ -184,6 +196,7 @@ export function upload(path, file, { onProgress, headers = {}, timeout = 180_000
     });
     xhr.addEventListener('load', () => {
       markOnline();
+      requireSignIn(xhr);
       let data = null;
       try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { data = null; }
       if (xhr.status >= 200 && xhr.status < 300) {

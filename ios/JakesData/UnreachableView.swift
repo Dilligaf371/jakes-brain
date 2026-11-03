@@ -11,7 +11,7 @@ struct UnreachableView: View {
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("Can't reach the PC")
+            Text("Can't connect right now")
                 .font(.title2.weight(.semibold))
             VStack(spacing: 4) {
                 ForEach(tried, id: \.self) { url in
@@ -20,7 +20,7 @@ struct UnreachableView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Join Tailscale on this phone or connect to home WiFi.")
+            Text("Check your internet connection and make sure your PC is on. Then try again.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

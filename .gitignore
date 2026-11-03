@@ -2,6 +2,7 @@
 node_modules/
 ios/JakesData.xcodeproj/
 ios/build/
+ios/build-device/
 *.db
 *.db-*
 jakes-data-app-data/

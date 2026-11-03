@@ -5,7 +5,7 @@ chromeless browser window. Both show the same web app served by the PC, so editi
 on the PC changes the app everywhere within about 30 seconds. Nothing goes through the App Store.
 
 ```
-iPhone (JakesData.app, WKWebView) ──Tailscale / home WiFi──▶  PC :4800  node server/index.js
+iPhone (JakesData.app, WKWebView) ──public HTTPS + sign-in──▶ PC :4801 gateway → :4800
 PC desktop window (Brave --app)   ──localhost──────────────▶   ├── web/      launcher + apps (plain HTML/CSS/JS)
                                                                ├── server/   JSON API + SQLite + media
                                                                └── jakes-data.service (systemd --user)
@@ -46,9 +46,11 @@ The first screen is a home screen: a grid of tiles plus a dock. Each tile is one
 
 Claude (the app, claude.ai, Claude Code) can use Jake's Brain like it uses Notion: log food, check
 today's totals, add tasks, groceries and notes. It is a custom connector served by the PC through a
-tunnel; only the connector is public, and it needs a real sign-in with your password, like Notion's.
+tunnel. The same public HTTPS address also serves the iPhone app behind a separate device sign-in.
+The PC stores all data; the phone needs internet access and no Tailscale app or VPN.
 Claude can do everything the app does, and anything you add shows up by itself after a deploy.
-Setup: `deploy/connector/README.md`. The address and password are in Settings → Claude connector.
+Setup: `deploy/connector/README.md`. Manage the password and Claude connection in Settings → Claude
+connector on the PC. Public app sessions last 90 days and can be signed out from Settings.
 
 ## Making changes
 
@@ -91,6 +93,7 @@ deploy/setup-pc.sh
 
 | | |
 |---|---|
+| Public iPhone app | https://nonpertinent-striped-deandre.ngrok-free.dev (sign-in required) |
 | PC over Tailscale | http://100.106.249.89:4800 |
 | PC on home WiFi | http://192.168.1.81:4800 |
 | Database | `~/jakes-data-app-data/jakesdata.db` on the PC (never in the repo) |

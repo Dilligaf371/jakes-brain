@@ -28,8 +28,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
-        CURRENT_PROJECT_VERSION: 4
-        MARKETING_VERSION: "1.3"
+        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: "1.4"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VTHP9BHH6
     info:
@@ -37,16 +37,23 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        # Plain http to the PC's private IPs. Personal app, never for the App Store.
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
-        # The LAN candidate (192.168.1.81) is a local-network connection; without this
-        # key iOS never shows the Local Network prompt and silently denies the probe.
-        NSLocalNetworkUsageDescription: Jake's Brain connects to your PC on the home Wi-Fi.
         ITSAppUsesNonExemptEncryption: false
         # The web app's photo/video pickers (Jakestagram) can also offer the camera.
         NSCameraUsageDescription: Jake's Brain uses the camera for photos and videos you post.
         NSMicrophoneUsageDescription: Jake's Brain uses the microphone when you record a video to post.
         NSPhotoLibraryUsageDescription: Jake's Brain lets you pick photos and videos to post.
     scheme:
-      testTargets: []
+      testTargets:
+        - JakesDataTests
+  JakesDataTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: JakesData
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jakebeau.jakesdata.tests
+        GENERATE_INFOPLIST_FILE: YES

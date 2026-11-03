@@ -1,4 +1,4 @@
-# Claude connector
+# Public app access and Claude connector
 
 Claude can read and change Jake's Brain the same way it works with Notion: as a **custom
 connector** (a remote MCP server) that you sign in to. The server is in
@@ -12,7 +12,7 @@ Claude (app / claude.ai / Claude Code)
 tunnel (ngrok or Cloudflare) ── runs on the PC as jakes-brain-tunnel.service
    │
    ▼
-127.0.0.1:4801  connector: sign-in pages + POST /mcp, 401 without a token, 404 for the rest
+127.0.0.1:4801  authenticated app gateway + OAuth/MCP connector
    │  loopback
    ▼
 127.0.0.1:4800  the normal app API (stays LAN + tailnet only)
@@ -22,7 +22,13 @@ The address holds no secret. Nothing gets in without your password, which you se
 **Settings → Claude connector**. The password can only be set from the private app, never from
 the public side. Five wrong tries lock sign-in for 15 minutes, doubling up to a day; setting the
 password clears the lock. **Sign everything out** (or changing the password) cuts Claude off
-immediately. Signing in lasts 90 days from Claude's last use.
+immediately, and revokes all app device sessions. Claude sign-in lasts 90 days from its last use.
+
+The iPhone opens the tunnel's HTTPS root and uses a separate 90-day app session. It does not need
+Tailscale, a VPN, or home Wi-Fi. The PC and `jakes-brain-tunnel.service` must remain running.
+Public `/api/health` contains only `{ok:true}`; all personal pages, APIs and media require sign-in.
+App cookies cannot authenticate MCP requests, and MCP tokens cannot authenticate app requests.
+Manage the password on the private desktop; public Settings can sign out its own device.
 
 ## One-time setup (from the Mac)
 
@@ -56,7 +62,8 @@ Claude connector**, with a Copy button. Set your password there.
 - **Claude Code:** `claude mcp add --transport http jakes-brain <address>`, then `/mcp` to sign in.
 
 On the free ngrok plan a browser sees ngrok's own warning page once before the sign-in page: click
-**Visit Site**. Claude's own requests never see it.
+**Visit Site**. Claude's requests and the iPhone shell use non-browser user agents, so they do not
+show it. The shell also sends `ngrok-skip-browser-warning` on native API requests.
 
 Then just talk to it: "log 4 eggs and PB toast for breakfast", "what have I eaten today",
 "set my goal to 2400 calories and 180 g protein", "add a habit", "what did I lift last week".

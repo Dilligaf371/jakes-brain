@@ -23,13 +23,11 @@ struct RootView: View {
             case .locating:
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Finding the PC…")
+                    Text("Connecting…")
                         .foregroundStyle(.secondary)
                 }
             case .loaded(let url):
-                // A main-frame load failure re-runs the locator rather than declaring the
-                // PC unreachable: another candidate may answer (e.g. the page was loaded
-                // over the LAN, the phone left home and Tailscale is on now).
+                // Reconnect when the phone changes networks or the gateway briefly drops.
                 WebShell(url: url, controller: web, onUnreachable: startLocating)
                     .ignoresSafeArea()
             case .unreachable(let tried):
@@ -55,10 +53,8 @@ struct RootView: View {
             }
             phase = .unreachable(Config.allCandidates())
 
-            // Fresh install only: the first LAN probe triggers the Local Network
-            // permission alert, and iOS may deny it while the alert is on screen. One
-            // automatic retry a few seconds later picks up the Allow without a tap.
-            guard !autoRetried, Config.lastGoodURL() == nil else { return }
+            // One automatic retry handles a brief network transition at launch.
+            guard !autoRetried else { return }
             autoRetried = true
             try? await Task.sleep(for: Self.firstRunRetryDelay)
             guard !Task.isCancelled else { return }

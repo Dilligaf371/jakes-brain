@@ -23,10 +23,13 @@ shown on his iPhone (native shell) and on the PC (browser app window). Read `REA
   no emoji as icons, no decorative illustrations, 44px tap targets, inputs ≥ 16px. Never
   `window.confirm/alert/prompt` (the shell swallows them) — use `kit.confirmSheet`. Hold the
   auto-reload (`kit.holdReload`) while the user is typing, uploading, playing, or streaming.
-- **No secrets in the repo.** The server is unauthenticated and reachable only on the home LAN
-  and the tailnet; do not expose it publicly without adding auth. The one public piece is the
-  Claude connector (`server/apps/connector.js`, `deploy/connector/`): a separate 127.0.0.1:4801
-  listener behind a secret URL. Never tunnel :4800. Give Claude new abilities by adding tools there.
+- **No secrets in the repo.** The main server :4800 stays private (LAN/tailnet). Never tunnel it.
+  The public HTTPS tunnel targets only 127.0.0.1:4801: `connector.js` preserves MCP OAuth and
+  `_app_gateway.js` protects app pages, APIs and media with device sessions. The phone uses this
+  public URL and must never require Tailscale or home Wi-Fi. Keep password changes and pairing-token
+  creation private; never put secrets in URLs, logs or git. App and MCP credentials are separate.
+  Claude discovers new abilities through `app_catalog`, `app_read` and `app_write`; document routes
+  in each module's header. Respect DENY and READ_ONLY for management and real-money routes.
 - **Verify before claiming done:** `node --check` your files, start a local server
   (`JAKESDATA_PORT=4811 JAKESDATA_DATA=/tmp/jd-data JAKESDATA_CONFIG=<scratch copy of server/config.json> node server/index.js`),
   curl the routes, and look at the UI at 390×844 (Playwright at

@@ -58,7 +58,7 @@ export default {
         cityHint,
         connectorSection(),
         section('How to update'),
-        el('p', { class: 'blurb', html: 'Edit <code>web/</code> or <code>server/</code> in <code>~/jakes-data-app</code> on the PC (or run <code>deploy/deploy.sh</code> from the Mac). The app refreshes itself within 30 seconds.' }),
+        el('p', { class: 'blurb', text: 'App updates arrive automatically. Keep the PC on and connected to the internet to use Jake’s Brain anywhere.' }),
       ),
     );
     els = { about, cityValue, cityRow, modelValue, modelRow, unitF, unitC };

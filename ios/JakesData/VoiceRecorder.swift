@@ -2,7 +2,8 @@ import AVFoundation
 import WebKit
 
 /// Records a memo for the Voice Memos app and uploads it to the PC. This lives in the shell
-/// because a page served over plain http cannot reach the microphone.
+/// to keep recording behavior consistent across app updates.
+@MainActor
 final class VoiceRecorder {
     private var recorder: AVAudioRecorder?
     private var fileURL: URL?
@@ -56,27 +57,29 @@ final class VoiceRecorder {
         self.recorder = nil
         self.fileURL = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        guard let page = webView?.url, var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) else {
-            emit(webView, state: "error", message: "Couldn't find the PC.")
+        guard let webView, let page = webView.url, Config.isAppURL(page) else {
+            try? FileManager.default.removeItem(at: fileURL)
+            emit(webView, state: "error", message: "Couldn't connect to your app.")
             return
         }
-        parts.path = "/api/voice/upload"
-        parts.query = nil
-        parts.fragment = nil
-        guard let target = parts.url else { return }
         emit(webView, state: "uploading")
-        var request = URLRequest(url: target)
-        request.httpMethod = "PUT"
-        request.timeoutInterval = 180
-        request.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
-        request.setValue("memo.m4a", forHTTPHeaderField: "X-Filename")
-        URLSession.shared.uploadTask(with: request, fromFile: fileURL) { [weak self, weak webView] _, response, error in
-            try? FileManager.default.removeItem(at: fileURL)
-            let ok = error == nil && (response as? HTTPURLResponse)?.statusCode == 201
-            DispatchQueue.main.async {
-                self?.emit(webView, state: ok ? "done" : "error", message: ok ? nil : "Upload failed. The recording was not saved.")
+        Task {
+            defer { try? FileManager.default.removeItem(at: fileURL) }
+            do {
+                var request = try await NativeHTTP.request(
+                    to: Config.origin.appendingPathComponent("api/voice/upload"), webView: webView
+                )
+                request.httpMethod = "PUT"
+                request.timeoutInterval = 180
+                request.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
+                request.setValue("memo.m4a", forHTTPHeaderField: "X-Filename")
+                let (_, response) = try await NativeHTTP.session.upload(for: request, fromFile: fileURL)
+                guard (response as? HTTPURLResponse)?.statusCode == 201 else { throw URLError(.badServerResponse) }
+                emit(webView, state: "done")
+            } catch {
+                emit(webView, state: "error", message: "Upload failed. The recording was not saved.")
             }
-        }.resume()
+        }
     }
 
     private func emit(_ webView: WKWebView?, state: String, message: String? = nil) {

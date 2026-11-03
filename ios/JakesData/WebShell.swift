@@ -45,12 +45,15 @@ struct WebShell: UIViewRepresentable {
         configuration.userContentController = content
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.customUserAgent = Config.userAgent
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = false
         webView.isOpaque = false
         webView.backgroundColor = .systemGroupedBackground
+        #if DEBUG
         webView.isInspectable = true
+        #endif
         webView.scrollView.contentInsetAdjustmentBehavior = .never // the web app handles safe areas
         webView.scrollView.bounces = true
 
@@ -67,10 +70,18 @@ struct WebShell: UIViewRepresentable {
         guard context.coordinator.lastLoadedURL != url else { return }
         context.coordinator.lastLoadedURL = url
         controller.isPageLoaded = false
-        webView.load(URLRequest(url: url))
+        context.coordinator.loadTask?.cancel()
+        context.coordinator.loadTask = Task { @MainActor in
+            await OwnerPairing.prepare(webView.configuration.websiteDataStore.httpCookieStore)
+            guard !Task.isCancelled else { return }
+            var request = URLRequest(url: url)
+            Config.addTransportHeaders(to: &request)
+            webView.load(request)
+        }
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        coordinator.loadTask?.cancel()
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
@@ -95,6 +106,7 @@ struct WebShell: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebShell
         var lastLoadedURL: URL?
+        var loadTask: Task<Void, Never>?
 
         init(_ parent: WebShell) {
             self.parent = parent
@@ -123,6 +135,11 @@ struct WebShell: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == WebShell.messageHandlerName,
+                  message.frameInfo.isMainFrame,
+                  let page = message.frameInfo.request.url, Config.isAppURL(page),
+                  message.frameInfo.securityOrigin.protocol == "https",
+                  message.frameInfo.securityOrigin.host.lowercased() == Config.origin.host?.lowercased(),
+                  [0, 443].contains(message.frameInfo.securityOrigin.port),
                   let body = message.body as? [String: Any]
             else { return }
             if body["type"] as? String == "reminders" {
@@ -157,6 +174,16 @@ struct WebShell: UIViewRepresentable {
             let leavesApp = (navigationAction.targetFrame?.isMainFrame ?? false) && !isInsideApp(url)
             if opensNewWindow || leavesApp {
                 openExternally(url)
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            if navigationResponse.isForMainFrame,
+               let url = navigationResponse.response.url, !isInsideApp(url) {
                 decisionHandler(.cancel)
             } else {
                 decisionHandler(.allow)
@@ -241,13 +268,11 @@ struct WebShell: UIViewRepresentable {
 
         /// URLs the web view handles itself: same origin as the base URL, or WebKit-internal schemes.
         private func isInsideApp(_ url: URL) -> Bool {
-            guard let scheme = url.scheme?.lowercased() else { return true }
-            if Self.internalSchemes.contains(scheme) { return true }
-            return Self.origin(of: url) == Self.origin(of: parent.url)
+            Config.isAppURL(url) || url.absoluteString == "about:blank"
         }
 
         private func openExternally(_ url: URL) {
-            guard let scheme = url.scheme?.lowercased(), !Self.internalSchemes.contains(scheme) else { return }
+            guard let scheme = url.scheme?.lowercased(), ["https", "http", "mailto", "tel"].contains(scheme) else { return }
             UIApplication.shared.open(url)
         }
 
@@ -259,14 +284,7 @@ struct WebShell: UIViewRepresentable {
             return top
         }
 
-        private static let internalSchemes: Set<String> = ["about", "blob", "data", "javascript"]
 
-        /// `scheme://host:port`, so a link to another service on the same PC still counts as external.
-        private static func origin(of url: URL) -> String? {
-            guard let scheme = url.scheme?.lowercased(), let host = url.host()?.lowercased() else { return nil }
-            let port = url.port ?? (scheme == "https" ? 443 : 80)
-            return "\(scheme)://\(host):\(port)"
-        }
     }
 }
 

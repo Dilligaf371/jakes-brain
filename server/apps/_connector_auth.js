@@ -37,6 +37,9 @@ export const PASSWORD_MIN = 10;
 const PASSWORD_MAX = 200;
 const SCOPE = 'brain';
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const APP_SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const APP_PAIR_TTL_MS = 10 * 60 * 1000;
+export const APP_COOKIE = '__Host-jakesbrain';
 const CLAUDE_CALLBACKS = ['https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback'];
 const AUTH_METHODS = ['none', 'client_secret_post', 'client_secret_basic'];
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -62,6 +65,17 @@ export const MIGRATIONS = [
         used_at    INTEGER
       );
       CREATE INDEX IF NOT EXISTS connector_tokens_family ON connector_tokens (family);
+    `,
+  },
+  {
+    id: 'connector-2',
+    sql: `
+      CREATE TABLE IF NOT EXISTS connector_app_sessions (
+        hash TEXT PRIMARY KEY, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS connector_app_pairings (
+        hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
+      );
     `,
   },
 ];
@@ -105,6 +119,8 @@ export function createAuth({ db, settings, dataDir, log, port }) {
   let fails = 0;
   let locks = 0;
   let lockedUntil = 0;
+  let passwordWork = false;
+  let credentialRevision = 0;
 
   const getClient = db.prepare('SELECT * FROM connector_clients WHERE client_id = ?');
   const addClient = db.prepare(`INSERT INTO connector_clients (client_id, secret_hash, name, redirect_uris, created_at)
@@ -122,6 +138,14 @@ export function createAuth({ db, settings, dataDir, log, port }) {
   const pruneTokens = db.prepare('DELETE FROM connector_tokens WHERE expires_at < ?');
   const dropFamily = db.prepare('DELETE FROM connector_tokens WHERE family = ?');
   const clearTokens = db.prepare('DELETE FROM connector_tokens');
+  const getAppSession = db.prepare('SELECT * FROM connector_app_sessions WHERE hash = ?');
+  const addAppSession = db.prepare('INSERT INTO connector_app_sessions (hash, created_at, expires_at) VALUES (?, ?, ?)');
+  const dropAppSession = db.prepare('DELETE FROM connector_app_sessions WHERE hash = ?');
+  const pruneAppSessions = db.prepare('DELETE FROM connector_app_sessions WHERE expires_at <= ?');
+  const clearAppSessions = db.prepare('DELETE FROM connector_app_sessions');
+  const addPairing = db.prepare('INSERT INTO connector_app_pairings (hash, expires_at) VALUES (?, ?)');
+  const consumePairing = db.prepare('DELETE FROM connector_app_pairings WHERE hash = ? AND expires_at > ? RETURNING hash');
+  const clearPairings = db.prepare('DELETE FROM connector_app_pairings');
   const signedIn = db.prepare(`SELECT c.name, c.last_used_at AS lastUsed FROM connector_clients c
     WHERE EXISTS (SELECT 1 FROM connector_tokens t
       WHERE t.client_id = c.client_id AND t.kind = 'refresh' AND t.used_at IS NULL AND t.expires_at > ?)
@@ -146,9 +170,12 @@ export function createAuth({ db, settings, dataDir, log, port }) {
     if (typeof password !== 'string' || password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
       throw new HttpError(400, `password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters`);
     }
-    const hadOne = Boolean(readPassword());
+    if (passwordWork) throw new HttpError(429, 'Sign-in is busy. Try again in a moment.');
+    passwordWork = true;
     const salt = crypto.randomBytes(16);
-    const key = await scrypt(password, salt, SCRYPT);
+    let key;
+    try { key = await scrypt(password, salt, SCRYPT); }
+    finally { passwordWork = false; }
     fs.mkdirSync(path.dirname(passwordFile), { recursive: true, mode: 0o700 });
     const next = `${passwordFile}.tmp`;
     fs.writeFileSync(next, JSON.stringify({
@@ -158,14 +185,18 @@ export function createAuth({ db, settings, dataDir, log, port }) {
     fails = 0;
     locks = 0;
     lockedUntil = 0;
-    if (hadOne) signOutAll();
+    signOutAll();
     log.info('connector password set');
   }
 
   // Counts the try BEFORE the slow hash, so a burst of parallel guesses can't outrun the lock.
   async function tryPassword(password) {
+    if (lockedUntil > Date.now()) throw new HttpError(429, 'Too many wrong passwords. Try again later.');
+    if (passwordWork) throw new HttpError(429, 'Sign-in is busy. Try again in a moment.');
     const stored = readPassword();
     if (!stored || typeof password !== 'string' || password.length > PASSWORD_MAX) return false;
+    passwordWork = true;
+    const revision = credentialRevision;
     fails += 1;
     if (fails >= MAX_TRIES) {
       fails = 0;
@@ -173,9 +204,13 @@ export function createAuth({ db, settings, dataDir, log, port }) {
       lockedUntil = Date.now() + Math.min(LOCK_BASE_MS * 2 ** (locks - 1), LOCK_MAX_MS);
       log.info(`connector sign-in locked for ${Math.round((lockedUntil - Date.now()) / 60000)} min after wrong passwords`);
     }
-    const key = await scrypt(password, Buffer.from(stored.salt, 'base64'), {
-      N: stored.N, r: stored.r, p: stored.p, maxmem: SCRYPT.maxmem,
-    });
+    let key;
+    try {
+      key = await scrypt(password, Buffer.from(stored.salt, 'base64'), {
+        N: stored.N, r: stored.r, p: stored.p, maxmem: SCRYPT.maxmem,
+      });
+    } finally { passwordWork = false; }
+    if (revision !== credentialRevision) return false;
     if (!crypto.timingSafeEqual(key, Buffer.from(stored.hash, 'base64'))) return false;
     fails = 0;
     locks = 0;
@@ -207,9 +242,56 @@ export function createAuth({ db, settings, dataDir, log, port }) {
 
   // Registered clients stay: Claude keeps its client_id, so it can come back to the sign-in page.
   function signOutAll() {
+    credentialRevision += 1;
     clearTokens.run();
+    clearAppSessions.run();
+    clearPairings.run();
     requests.clear();
     codes.clear();
+  }
+
+  function appCookieToken(req) {
+    const matches = String(req.headers.cookie || '').split(';').map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith(`${APP_COOKIE}=`));
+    if (matches.length !== 1) return null;
+    const token = matches[0].slice(APP_COOKIE.length + 1);
+    return /^[\w-]{43}$/.test(token) ? token : null;
+  }
+
+  function verifyAppSession(req) {
+    const token = appCookieToken(req);
+    const row = token && getAppSession.get(sha256(token));
+    return row && row.expires_at > Date.now() ? row : null;
+  }
+
+  function issueAppSession() {
+    const now = Date.now();
+    pruneAppSessions.run(now);
+    const count = db.prepare('SELECT COUNT(*) AS count FROM connector_app_sessions').get().count;
+    if (count >= 100) throw new HttpError(429, 'Too many signed-in devices. Sign out other devices first.');
+    const token = randomToken();
+    addAppSession.run(sha256(token), now, now + APP_SESSION_TTL_MS);
+    return `${APP_COOKIE}=${token}; Path=/; Max-Age=${APP_SESSION_TTL_MS / 1000}; Secure; HttpOnly; SameSite=Lax`;
+  }
+
+  function signOutApp(req) {
+    const token = appCookieToken(req);
+    if (token) dropAppSession.run(sha256(token));
+    return `${APP_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`;
+  }
+
+  function createAppPairing() {
+    if (!readPassword()) throw new HttpError(409, 'Set the app password before pairing a device.');
+    const token = randomToken();
+    const expiresAt = Date.now() + APP_PAIR_TTL_MS;
+    clearPairings.run();
+    addPairing.run(sha256(token), expiresAt);
+    return { token, expiresAt: new Date(expiresAt).toISOString(), url: base(), redeemPath: '/app-pair' };
+  }
+
+  function redeemAppPairing(token) {
+    if (typeof token !== 'string' || !/^[\w-]{43}$/.test(token)) return false;
+    return Boolean(consumePairing.get(sha256(token), Date.now()));
   }
 
   function status() {
@@ -491,5 +573,6 @@ ${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
     return true;
   }
 
-  return { route, verify, resourceMetadataUrl, setPassword, signOutAll, status };
+  return { route, verify, resourceMetadataUrl, setPassword, signOutAll, status, tryPassword,
+    verifyAppSession, issueAppSession, signOutApp, createAppPairing, redeemAppPairing, publicOrigin: base };
 }

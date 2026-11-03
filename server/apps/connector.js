@@ -3,7 +3,7 @@
 //
 // It is a SECOND listener, separate from the app on :4800. It binds 127.0.0.1 only, so the
 // one way in from outside is the tunnel on this PC (deploy/connector/). It answers POST /mcp for
-// whoever signed in, plus the sign-in paths in _connector_auth.js; every other path is a 404.
+// whoever signed in, plus OAuth and a separately authenticated browser/native app gateway.
 // Nothing here is reachable without Jake's password, and the address itself holds no secret.
 //
 // Tools call this server's own JSON API over loopback, so they get exactly the same validation
@@ -29,6 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readJsonBody, sendJson, HttpError } from '../http.js';
 import { createAuth, MIGRATIONS } from './_connector_auth.js';
+import { createAppGateway, parseGatewayUrl, requireLocalPairingRequest } from './_app_gateway.js';
 
 const MAIN_PORT = Number(process.env.JAKESDATA_PORT) || 4800;
 const PORT = process.env.JAKESDATA_CONNECTOR_PORT !== undefined
@@ -38,7 +39,7 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const BODY_LIMIT = 1024 * 1024;
 const API_TIMEOUT_MS = 20_000;
 const HEADERS_TIMEOUT_MS = 15_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 15 * 60_000;
 const APP_TIMEOUT_MS = 55_000;  // a JakeGPT reply streams for a while
 const OUTPUT_MAX = 100_000;     // characters of one reply handed back to Claude
 const SOURCE_MAX = 24_000;      // characters of a module's source in app_catalog
@@ -59,6 +60,7 @@ Food log: whenever Jake says he ate or drank something, log it with food_log. Es
 Everything else: the app does far more than the dedicated tools here (workouts, habits, reminders, calendar, people, deals, saved links, voice memos, focus, day log, reels, files and any app added later). To do anything in it, call app_catalog for that app, then app_read or app_write with the routes it lists. app_catalog always reflects the running app.`;
 
 let auth = null;
+let appGateway = null;
 let liveRoutes = () => [];
 let listening = false;
 let lastCall = null;
@@ -68,6 +70,7 @@ export default {
   migrations: MIGRATIONS,
   register(r, ctx) {
     auth = createAuth({ db: ctx.db, settings: ctx.settings, dataDir: ctx.dataDir, log: ctx.log, port: PORT });
+    appGateway = createAppGateway({ auth, mainPort: MAIN_PORT });
     liveRoutes = ctx.routes;
     fs.rmSync(path.join(ctx.dataDir, 'connector', 'secret'), { force: true }); // the old URL secret
 
@@ -85,6 +88,11 @@ export default {
       ctx.log.info('connector: signed everything out');
       return info();
     });
+    r.post('/api/connector/app-pairing', async (req) => {
+      requireLocalPairingRequest(req, MAIN_PORT);
+      await readJsonBody(req, { limit: 4096, idleMs: 10000 });
+      return auth.createAppPairing();
+    });
 
     if (!PORT) {
       ctx.log.info('connector off (JAKESDATA_CONNECTOR_PORT=0)');
@@ -92,8 +100,8 @@ export default {
     }
     const server = http.createServer((req, res) => {
       handle(req, res, ctx).catch((err) => {
-        ctx.log.error('connector request failed:', err);
-        if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
+        if (!(err instanceof HttpError)) ctx.log.error('connector request failed:', err);
+        if (!res.headersSent) sendJson(res, err instanceof HttpError ? err.status : 500, { error: err instanceof HttpError ? err.message : 'internal error' });
         else res.destroy();
       });
     });
@@ -115,11 +123,11 @@ export default {
 
 async function handle(req, res, ctx) {
   const t0 = performance.now();
-  const url = new URL(req.url, 'http://localhost');
+  const url = parseGatewayUrl(req.url);
   // The path only: a query string can carry an authorization code.
   res.on('close', () => console.log(`[connector] ${req.method} ${url.pathname.slice(0, 60)} ${res.statusCode} ${Math.round(performance.now() - t0)}ms`));
   if (await auth.route(req, res, url)) return;
-  if (url.pathname !== '/mcp') return sendJson(res, 404, { error: 'not found' });
+  if (url.pathname !== '/mcp') return appGateway(req, res, url);
   if (!auth.verify(req)) {
     const bad = req.headers.authorization ? ', error="invalid_token"' : '';
     return sendJson(res, 401, { error: 'sign-in required' }, {

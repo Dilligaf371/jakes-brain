@@ -5,6 +5,12 @@ import { api, el, toast, haptic, section, confirmSheet, fmt } from '../../kit.js
 import { formSheet } from '../../form.js';
 
 export function connectorSection() {
+  if (location.protocol === 'https:') {
+    return el('div', { class: 'connector' }, section('Account'),
+      el('p', { class: 'hint', text: 'Signed in on this device. Manage your password and Claude connection in Settings on the PC.' }),
+      el('form', { method: 'post', action: '/app-logout' },
+        el('button', { class: 'button connector-signout', type: 'submit', text: 'Sign out this device' })));
+  }
   const status = el('span', { class: 'right', text: '—' });
   const addr = el('span', { class: 'right', text: '—' });
   const pass = el('span', { class: 'right', text: '—' });
@@ -112,7 +118,7 @@ export function connectorSection() {
   async function doSignOut() {
     const ok = await confirmSheet({
       title: 'Sign everything out?',
-      message: 'Claude loses access right away. You will need to sign in again from Claude.',
+      message: 'Claude and all signed-in app devices lose access right away. You will need to sign in again.',
       confirmLabel: 'Sign out',
       destructive: true,
     });

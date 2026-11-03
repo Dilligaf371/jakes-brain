@@ -36,7 +36,7 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
 
     func sync() {
         guard !syncing, UIApplication.shared.applicationState == .active, let page = webView?.url,
-              let scheme = page.scheme, scheme.hasPrefix("http"),
+              Config.isAppURL(page),
               var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return }
         parts.query = nil
         parts.fragment = nil
@@ -58,21 +58,21 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
 
     private func report(_ status: String, to url: URL) async {
         guard reportedStatus != status else { return }
-        var request = URLRequest(url: url)
+        guard let webView, var request = try? await NativeHTTP.request(to: url, webView: webView) else { return }
         request.httpMethod = "POST"
         request.timeoutInterval = 8
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["status": status, "version": version])
-        if let (_, response) = try? await URLSession.shared.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200 {
+        if let (_, response) = try? await NativeHTTP.session.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200 {
             reportedStatus = status
         }
     }
 
     private func fetch(_ url: URL) async -> [Item]? {
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        guard let webView, var request = try? await NativeHTTP.request(to: url, webView: webView) else { return nil }
         request.timeoutInterval = 8
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        guard let (data, response) = try? await NativeHTTP.session.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return (try? JSONDecoder().decode(Payload.self, from: data))?.reminders
     }

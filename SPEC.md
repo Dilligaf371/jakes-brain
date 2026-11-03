@@ -21,8 +21,11 @@ on the PC changes the app with no rebuild; only `ios/` changes need Xcode.
 | Apple team | 3VTHP9BHH6 (paid, Individual) |
 | Jake's iPhone UDID | 00008150-00062DD41408401C (iPhone 17 Pro) |
 
-Base URLs the phone tries, in order: `http://100.106.249.89:4800` (Tailscale, works
-anywhere once Tailscale is on the phone) then `http://192.168.1.81:4800` (home WiFi).
+The iPhone uses `https://nonpertinent-striped-deandre.ngrok-free.dev` over ordinary internet.
+The PC tunnel forwards to authenticated gateway :4801, which proxies signed-in app requests to
+private :4800. No phone VPN is required. Native health discovery is public but returns only `{ok:true}`.
+Native requests copy the WebKit session cookie and send the same-origin `Origin`; old private URL
+caches are ignored. The desktop still uses localhost:4800.
 
 ## Repo layout
 
@@ -450,8 +453,9 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
 
 ### connector  (added 2026-11-02 — "Claude should update my app like it updates Notion")
 - `server/apps/connector.js`: a remote MCP server (Streamable HTTP, stateless, JSON responses) on a
-  second listener, 127.0.0.1:4801, answering `POST /mcp` for a signed-in client and 404 for anything
-  outside the sign-in paths. Tools call the app's own API over loopback.
+  second listener, 127.0.0.1:4801, answering `POST /mcp` for a signed-in client. Other paths go
+  through `_app_gateway.js`, which requires a separate app cookie before proxying pages, APIs and
+  media. Tools call the app's own API over loopback.
 - Claude can do everything in the app with no upkeep: `app_catalog` lists the live routes from the
   router, explained by each module's header comment and SPEC section (plus its source when the header
   is thin), and `app_read` / `app_write` call any of them. New modules and routes appear when they
@@ -466,8 +470,12 @@ plain http cannot reach the microphone; the shell sets `window.JakesData.canReco
   hash in `DATA/connector/password`, settable only from the private app. Redirects are limited to
   Claude's callback and loopback. Tables `connector_clients`, `connector_tokens` (hashes only,
   migration `connector-1`), so a deploy restart keeps Claude signed in.
-- Settings → Claude connector shows the status, public address, connector address (Copy), the
-  password, what is signed in, and "Sign everything out".
+- On the private desktop, Settings → Claude connector shows status, address, password controls,
+  signed-in clients and "Sign everything out". Password changes and sign-out revoke app sessions too.
+- App sign-in reuses the existing password, with 90-day Secure/HttpOnly/SameSite device cookies.
+  Private loopback-only pairing can mint a short-lived, one-use token; native installation passes
+  it through a protected file/process environment and redeems it in a POST body. Never a URL.
+- Public Settings offers "Sign out this device"; credential administration stays on the PC.
 
 ## Desktop version (added 2026-11-02)
 
