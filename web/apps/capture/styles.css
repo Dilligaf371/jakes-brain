@@ -1,0 +1,131 @@
+/* Capture app (the frictionless inbox). Mirrors the Tasks look. */
+.app-capture .capture-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.app-capture .capture-input { flex: 1 1 auto; }
+
+.app-capture .capture-add {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  color: var(--accent);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.app-capture .capture-add:disabled { opacity: 0.45; cursor: default; }
+
+.app-capture .capture {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-capture .capture:last-child { border-bottom: 0; }
+
+.app-capture .capture .check {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--grey);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: #fff;
+}
+
+.app-capture .capture .check::before {
+  /* enlarge the tap target without changing the drawn circle */
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+.app-capture .capture .check .icon {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+
+.app-capture .capture .check[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.app-capture .capture .check[aria-checked="true"] .icon { display: block; }
+
+.app-capture .capture .body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-capture .capture .text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.app-capture .captures-done .capture .text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.app-capture .capture .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.app-capture .capture .chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hair);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-capture .capture .del {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: -14px; /* the card's horizontal padding: the drawn × stays put, the target is 44x44 */
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-capture .capture .del[data-armed="true"] {
+  color: var(--red);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+
+.app-capture .capture.pending { opacity: 0.55; }
+
+.app-capture .capture .check, .app-capture .capture .del, .app-capture .capture-add {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .app-capture .capture-add:hover, .app-capture .capture .del:hover { opacity: 0.75; }
+}

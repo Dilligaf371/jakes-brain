@@ -1,0 +1,122 @@
+/* Today app: ICO's daily cockpit. Calm, iPhone-like. */
+.app-today .today-header { margin-bottom: 18px; }
+
+.app-today .today-date {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.app-today .today-headline {
+  margin-top: 4px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.app-today .today-items { margin-bottom: 8px; }
+
+.app-today .today-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app-today .today-item:last-child { border-bottom: 0; }
+
+.app-today .today-item .check {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--grey);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: #fff;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.app-today .today-item .check::before {
+  /* enlarge the tap target without changing the drawn circle */
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+.app-today .today-item .check .icon {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+
+.app-today .today-item .check[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.app-today .today-item .check[aria-checked="true"] .icon { display: block; }
+
+.app-today .today-item .text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.app-today .today-item.done .text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.app-today .today-item .kind {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--fill);
+  border-radius: 999px;
+  padding: 3px 9px;
+  text-transform: lowercase;
+}
+
+.app-today .today-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.app-today .today-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.app-today .today-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.app-today .today-card-value .n {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.app-today .today-card-value .u {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-today .today-card-label {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}

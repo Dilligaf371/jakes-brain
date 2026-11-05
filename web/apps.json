@@ -6,6 +6,8 @@
     "jakegpt"
   ],
   "grid": [
+    "today",
+    "capture",
     "graph",
     "calendar",
     "tasks",
@@ -128,6 +130,16 @@
     "food": {
       "label": "Food",
       "color": "#ca8a04"
+    },
+    "today": {
+      "label": "Today",
+      "color": "#ff2d55",
+      "badge": "/api/today/badge"
+    },
+    "capture": {
+      "label": "Capture",
+      "color": "#5856d6",
+      "badge": "/api/capture/badge"
     }
   }
 }
