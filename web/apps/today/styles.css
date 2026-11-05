@@ -9,9 +9,10 @@
 
 .app-today .today-headline {
   margin-top: 4px;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
@@ -78,14 +79,23 @@
 
 .app-today .today-item .kind {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--muted);
-  background: var(--fill);
+  background: color-mix(in srgb, var(--grey) 22%, transparent);
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   text-transform: lowercase;
 }
+
+/* Colour-coded by type, iOS-style: a faint tint of the system colour, the same colour for the label. */
+.app-today .today-item .kind[data-kind="reply"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.app-today .today-item .kind[data-kind="deadline"] { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
+.app-today .today-item .kind[data-kind="approval"] { color: var(--green); background: color-mix(in srgb, var(--green) 18%, transparent); }
+.app-today .today-item .kind[data-kind="proposal"] { color: #5e5ce6; background: color-mix(in srgb, #5e5ce6 16%, transparent); }
+.app-today .today-item .kind[data-kind="question"] { color: var(--amber); background: color-mix(in srgb, var(--amber) 20%, transparent); }
+.app-today .today-item .kind[data-kind="decision"] { color: #bf5af2; background: color-mix(in srgb, #bf5af2 16%, transparent); }
 
 .app-today .today-summary {
   display: grid;
@@ -94,9 +104,13 @@
 }
 
 .app-today .today-card {
-  background: var(--card);
-  border-radius: 12px;
-  padding: 14px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 18px;
+  padding: 15px 16px;
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
 }
 
 .app-today .today-card-value {

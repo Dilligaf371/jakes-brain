@@ -920,3 +920,127 @@ body.app-open .toast { bottom: calc(var(--sab) + 28px); }
     transform: scale(0.96);
   }
 }
+
+/* ================================================================== Liquid Glass (ICO)
+   Tier-1 iOS 26 pass over the calm base: translucent layered materials, depth, specular
+   highlights, an ambient backdrop for the glass to refract, and themed browser surfaces.
+   Appended as one contiguous block so it stays easy to re-merge over upstream. */
+
+:root {
+  --tile-radius: 18px;
+  --card-radius: 22px;
+  --glass: rgba(255, 255, 255, 0.60);
+  --glass-stroke: rgba(255, 255, 255, 0.72);
+  --glass-hi: rgba(255, 255, 255, 0.92);          /* specular top edge */
+  --glass-blur: saturate(180%) blur(28px);
+  --elev: 0 10px 34px rgba(17, 24, 39, 0.12), 0 2px 8px rgba(17, 24, 39, 0.06);
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);  /* ease-out-quint: smooth deceleration, no bounce */
+  --ambient:
+    radial-gradient(120% 70% at 50% -8%, rgba(0, 122, 255, 0.10), transparent 60%),
+    radial-gradient(92% 62% at 100% 108%, rgba(175, 82, 222, 0.09), transparent 55%),
+    #e9ebf1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glass: rgba(34, 34, 40, 0.52);
+    --glass-stroke: rgba(255, 255, 255, 0.10);
+    --glass-hi: rgba(255, 255, 255, 0.16);
+    --elev: 0 14px 40px rgba(0, 0, 0, 0.50), 0 2px 10px rgba(0, 0, 0, 0.36);
+    --ambient:
+      radial-gradient(120% 70% at 50% -8%, rgba(10, 132, 255, 0.18), transparent 60%),
+      radial-gradient(95% 65% at 100% 108%, rgba(191, 90, 242, 0.13), transparent 55%),
+      #05060a;
+  }
+}
+
+/* Ambient backdrop so the frosted surfaces have something to refract. */
+body, .home, .applayer { background: var(--ambient); }
+
+/* Browser surfaces carry the design too. */
+:root { accent-color: var(--accent); caret-color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--grey) 70%, transparent) transparent; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--grey) 60%, transparent); border-radius: 4px; }
+
+/* Glass surfaces: translucent material, specular top edge, real depth, continuous radius. */
+.card, .sheet-group, .button, .input {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--card-radius);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
+}
+.card { padding: 2px 16px; }
+.input {
+  border-radius: 16px;
+  padding: 13px 15px;
+}
+.input:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-stroke));
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.button { font-size: 17px; }
+.button:active { transform: scale(0.98); opacity: 0.85; }
+/* Hairlines inside glass read softer than the opaque base. */
+.card-title, .kv, .row { border-color: color-mix(in srgb, var(--text) 9%, transparent); }
+
+/* Tiles keep the solid app colour but gain a sheen, depth and a springy press. */
+.tile {
+  border-radius: var(--tile-radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.14),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+  transition: transform 240ms var(--spring), filter 140ms ease;
+}
+.tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 44%);
+  pointer-events: none;
+}
+.tile-btn:active .tile { transform: scale(0.9); filter: brightness(0.9); }
+
+/* Dock & nav bar: the signature frosted bars. */
+.dock {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 30px;
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 12px 30px rgba(0, 0, 0, 0.26);
+}
+.navbar {
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  -webkit-backdrop-filter: saturate(200%) blur(26px);
+  backdrop-filter: saturate(200%) blur(26px);
+  border-bottom: 1px solid var(--glass-stroke);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+
+/* Glass pills. */
+.chip {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+}
+.segmented { background: color-mix(in srgb, var(--grey) 20%, transparent); }
+.segmented > button[aria-pressed="true"] {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* Badge keeps its own small depth so it floats over the tile. */
+.badge { box-shadow: 0 0 0 2px var(--bg), 0 2px 7px rgba(255, 59, 48, 0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile { transition: none; }
+  .tile-btn:active .tile, .button:active { transform: none; }
+}

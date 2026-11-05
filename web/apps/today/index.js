@@ -100,7 +100,7 @@ function itemRow(item) {
   }, icon('check', { size: 14, strokeWidth: 2.6 }));
   const text = el('span', { class: 'text', text: item.text });
   const row = el('li', { class: item.done ? 'today-item done' : 'today-item', dataset: { id: item.id } }, check, text);
-  if (item.kind) row.append(el('span', { class: 'kind', text: item.kind }));
+  if (item.kind) row.append(el('span', { class: 'kind', dataset: { kind: item.kind }, text: item.kind }));
   return row;
 }
 
