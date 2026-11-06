@@ -44,7 +44,7 @@ export default {
     root.append(
       navbar({ title: 'Services' }),
       el('div', { class: 'app-content lx-page' },
-        el('p', { class: 'lx-lead', text: 'Ce qu’ICO repère dans vos mails : livraisons, factures et démarches officielles.' }),
+        el('p', { class: 'lx-lead', text: 'Ce qu’ICO repère dans vos mails et SMS : livraisons, factures et démarches officielles.' }),
         sections,
         el('section', { class: 'lx-section', 'aria-labelledby': 'svc-apps-h' },
           el('div', { class: 'lx-head' }, el('h2', { id: 'svc-apps-h', text: 'Vos apps' })),

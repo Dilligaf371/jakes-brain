@@ -8,7 +8,11 @@
 //         the owner's "done" is never undone by the next sync.
 //   PATCH /api/services/events/:id {done} -> { event }
 //   GET   /api/services/badge            -> { count: <open deliveries + bills + official> }
+//   POST  /api/services/sms {sender, text, at?} -> { kept, event? }  one SMS forwarded by the
+//         owner's iPhone Shortcuts automation; anything unrecognised (or a one-time code) is
+//         dropped without being stored.
 import { readJsonBody, sendJson, HttpError } from '../http.js';
+import { classifySms } from './_sms_classifier.js';
 
 const KINDS = new Set(['delivery', 'bill', 'official']);
 const BATCH_MAX = 200;
@@ -52,6 +56,19 @@ export default {
       if (body.events.length > BATCH_MAX) throw new HttpError(400, `too many events (max ${BATCH_MAX})`);
       const events = body.events.map(validateEvent);
       return { upserted: repo.upsertAll(events) };
+    });
+
+    r.post('/api/services/sms', async (req) => {
+      const body = await readJsonBody(req);
+      if (!body || typeof body.sender !== 'string' || typeof body.text !== 'string') {
+        throw new HttpError(400, 'sender and text must be strings');
+      }
+      if (body.sender.length > 100 || body.text.length > 2000) throw new HttpError(400, 'sms too long');
+      const at = body.at ? new Date(body.at) : new Date();
+      const event = classifySms(body.sender, body.text, Number.isNaN(at.getTime()) ? new Date().toISOString() : at.toISOString());
+      if (!event) return { kept: false };
+      repo.upsertAll([validateEvent(event)]);
+      return { kept: true, event: { kind: event.kind, provider: event.provider, title: event.title } };
     });
 
     r.patch('/api/services/events/:id', async (req, res, { params }) => {
