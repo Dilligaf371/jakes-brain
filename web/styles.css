@@ -1307,19 +1307,19 @@ body, .home, .applayer { background: var(--ambient); }
 }
 
 /* The Ideas app lives in the same room as the home. */
-.applayer:has(.app-ideas) {
+.applayer:has(.app-ideas, .app-services) {
   background:
     radial-gradient(120% 50% at 50% -10%, color-mix(in srgb, var(--lx-gold) 9%, transparent), transparent 60%),
     var(--lx-bg);
 }
-.app-ideas {
+.app-ideas, .app-services {
   --accent: var(--lx-gold);
   color: var(--lx-ink);
 }
-.app-ideas .navbar {
+.app-ideas .navbar, .app-services .navbar {
   background: color-mix(in srgb, var(--lx-bg) 70%, transparent);
   border-bottom-color: var(--lx-rule);
   box-shadow: none;
 }
-.app-ideas .nav-title { font-family: var(--lx-serif); font-weight: 500; }
-.app-ideas .nav-back { color: var(--lx-gold); }
+.app-ideas .nav-title, .app-services .nav-title { font-family: var(--lx-serif); font-weight: 500; }
+.app-ideas .nav-back, .app-services .nav-back { color: var(--lx-gold); }

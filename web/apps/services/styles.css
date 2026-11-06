@@ -1,0 +1,45 @@
+/* Services: same room as the home and Ideas (shared .lx-* rules live in /styles.css). */
+.app-services .lx-page { max-width: 680px; margin: 0 auto; }
+.app-services .lx-lead {
+  margin: 4px 0 4px;
+  max-width: 52ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--lx-muted);
+}
+.app-services .lx-section { margin-top: 30px; }
+
+.app-services .svc-app { grid-template-columns: 1fr 20px; text-decoration: none; }
+
+.app-services .svc-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+.app-services .svc-body { display: grid; gap: 5px; min-width: 0; }
+.app-services .svc-title { font-size: 18px; overflow-wrap: anywhere; }
+.app-services .svc-done {
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lx-gold);
+  background: none;
+  border: 1px solid var(--lx-rule);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 200ms var(--lx-ease);
+}
+.app-services .svc-done:active { background: color-mix(in srgb, var(--lx-gold) 14%, transparent); }
+.app-services .svc-done:focus-visible { outline: 1px solid var(--lx-gold); outline-offset: 3px; }
+
+.app-services .svc-empty {
+  margin: 8px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--lx-rule);
+  font-size: 15px;
+  color: var(--lx-muted);
+}

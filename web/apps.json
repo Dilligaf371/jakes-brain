@@ -6,6 +6,7 @@
     "habits"
   ],
   "grid": [
+    "services",
     "graph",
     "calendar",
     "tasks",
@@ -133,6 +134,11 @@
     "ideas": {
       "label": "Ideas",
       "color": "#ff9f0a"
+    },
+    "services": {
+      "label": "Services",
+      "color": "#1c1a16",
+      "badge": "/api/services/badge"
     }
   }
 }
