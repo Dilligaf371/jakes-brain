@@ -1,0 +1,12 @@
+/* Ideas: Khalas-style gallery, 3D clay art on Liquid Glass cards. */
+.app-ideas .ideas-lead {
+  margin: 0 4px 16px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.app-ideas .ideas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}

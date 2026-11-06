@@ -47,6 +47,7 @@ export const MIME = Object.freeze({
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
   '.mp4': 'video/mp4',
   '.m4v': 'video/x-m4v',
   '.mov': 'video/quicktime',

@@ -2,6 +2,7 @@
 // (lazy import of web/apps/<id>/index.js + its styles.css), the open/close animation, the
 // build-change reload with holds, and the foreground/online refresh hooks.
 import * as kit from './kit.js';
+import { renderIcoHome, refreshIcoHome } from './home-ico.js';
 
 const { el, toast, haptic, api, nav, normalizeHash } = kit;
 
@@ -165,6 +166,7 @@ function onTileTap(id, tile) {
 function renderHome() {
   els.grid.replaceChildren(...registry.grid.filter((id) => appMeta(id)).map(tileButton));
   els.dock.replaceChildren(...registry.dock.filter((id) => appMeta(id)).map(tileButton));
+  renderIcoHome(document.getElementById('ico-home'));
   updateDate();
 }
 
@@ -194,6 +196,7 @@ function setBadge(id, count) {
 
 function refreshBadges() {
   if (current || document.hidden) return;
+  refreshIcoHome();
   for (const [id, meta] of Object.entries(registry.apps)) {
     if (!meta || typeof meta.badge !== 'string') continue;
     api(meta.badge, { timeout: 5000 }).then((data) => setBadge(id, data && data.count)).catch(() => {});

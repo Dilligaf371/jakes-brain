@@ -1,32 +1,21 @@
 {
   "dock": [
-    "notes",
-    "jakestagram",
-    "jaketube",
-    "jakegpt"
+    "today",
+    "ideas",
+    "capture",
+    "habits"
   ],
   "grid": [
-    "today",
-    "capture",
     "graph",
     "calendar",
     "tasks",
-    "grocery",
+    "notes",
     "reminders",
-    "workout",
     "food",
-    "habits",
-    "weather",
-    "files",
-    "reels",
-    "deals",
     "people",
+    "files",
     "saved",
     "voice",
-    "focus",
-    "daylog",
-    "bots",
-    "server",
     "settings"
   ],
   "apps": {
@@ -57,8 +46,8 @@
       "color": "#10a37f"
     },
     "habits": {
-      "label": "Habits",
-      "color": "#ff9f0a"
+      "label": "Goals",
+      "color": "#30d158"
     },
     "files": {
       "label": "Files",
@@ -137,9 +126,13 @@
       "badge": "/api/today/badge"
     },
     "capture": {
-      "label": "Capture",
+      "label": "Inbox",
       "color": "#5856d6",
       "badge": "/api/capture/badge"
+    },
+    "ideas": {
+      "label": "Ideas",
+      "color": "#ff9f0a"
     }
   }
 }

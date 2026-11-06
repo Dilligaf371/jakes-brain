@@ -1044,3 +1044,190 @@ body, .home, .applayer { background: var(--ambient); }
   .tile { transition: none; }
   .tile-btn:active .tile, .button:active { transform: none; }
 }
+
+/* ------------------------------------------------------------------ ICO home (Khalas-style) */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/BricolageGrotesque_700Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+.ico-home {
+  width: 100%;
+  max-width: 760px;
+  align-self: center;
+  margin-bottom: 26px;
+  padding: 0 6px;
+}
+
+.ico-greeting {
+  margin: 0 4px 14px;
+  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.ico-today {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 16px 18px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--card-radius);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
+  cursor: pointer;
+  transition: transform 260ms var(--spring);
+}
+.ico-today:active { transform: scale(0.98); }
+
+.ico-today-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ff375f;
+}
+
+.ico-today-headline {
+  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.ico-today-items {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  color: var(--muted);
+}
+.ico-today-items li {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+.ico-today-items li span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ico-today-items .dot {
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--grey);
+  transform: translateY(-1px);
+}
+.ico-today-items .dot[data-kind="deadline"] { background: var(--red); }
+.ico-today-items .dot[data-kind="reply"] { background: var(--accent); }
+.ico-today-items .dot[data-kind="approval"] { background: var(--green); }
+.ico-today-items .dot[data-kind="question"] { background: var(--amber); }
+
+.ico-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 22px 4px 10px;
+  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+.ico-more {
+  padding: 4px 0;
+  font: inherit;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.ico-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 132px;
+  gap: 10px;
+  margin: 0 -18px;
+  padding: 2px 18px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 18px;
+  scrollbar-width: none;
+}
+.ico-strip::-webkit-scrollbar { display: none; }
+
+/* Idea card: shared by the home strip and the Ideas app. */
+.idea-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 132px;
+  padding: 12px 13px 13px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: transform 260ms var(--spring);
+}
+.idea-card:active { transform: scale(0.96); }
+.idea-art {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.22));
+}
+.idea-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ico-today, .idea-card { transition: none; }
+}
+
+/* The dock floats over the scrolling home, iOS-style; the date sits with the greeting. */
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: auto;
+}
+.grid { padding-bottom: 18px; }
+.home-date {
+  width: 100%;
+  max-width: 760px;
+  align-self: center;
+  margin-bottom: 2px;
+  padding: 0 14px;
+  text-align: left;
+}
