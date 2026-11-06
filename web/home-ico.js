@@ -1,31 +1,42 @@
-// home-ico.js — ICO's Khalas-style top of the home screen: a greeting, a live Today card and a
-// strip of Ideas. Kept out of launcher.js so upstream merges stay small: the launcher only calls
-// renderIcoHome() on render and refreshIcoHome() with its badge refresh.
+// home-ico.js — ICO's top of the home screen, black & champagne: a serif greeting, the day's
+// brief as an editorial list (Today) and the first Ideas. Kept out of launcher.js so upstream
+// merges stay small: the launcher only calls renderIcoHome() on render and refreshIcoHome()
+// with its badge refresh.
 import { api, el, nav, haptic } from './kit.js';
-import { IDEAS, ideaIcon, askICO } from './ideas.js';
+import { IDEAS, ideaRow, arrow } from './ideas.js';
 
-const STRIP_MAX = 8;
-let todayCard = null;
+const HOME_IDEAS = 4;
+const TODAY_ITEMS = 3;
+const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+let todayBody = null;
+let todayCount = null;
 let inflight = false;
 
 export function renderIcoHome(host) {
   if (!host) return;
-  todayCard = el('button', { class: 'ico-today', type: 'button', 'aria-label': 'Today', 'on:click': () => { haptic('light'); nav.go('#/today'); } });
-  const strip = el('div', { class: 'ico-strip', role: 'list' }, ...IDEAS.slice(0, STRIP_MAX).map(stripItem));
+  todayCount = el('span', { class: 'lx-count' });
+  todayBody = el('button', { class: 'lx-today', type: 'button', 'on:click': () => { haptic('light'); nav.go('#/today'); } });
+  const now = new Date();
   host.replaceChildren(
-    el('h1', { class: 'ico-greeting', text: greeting() }),
-    todayCard,
-    el('div', { class: 'ico-row-head' },
-      el('span', { text: 'Ideas' }),
-      el('button', { class: 'ico-more', type: 'button', text: 'Tout voir', 'on:click': () => nav.go('#/ideas') })),
-    strip,
+    el('header', { class: 'lx-hero' },
+      el('h1', { class: 'lx-greeting' }, greeting(now), el('span', { class: 'lx-dot', text: '.' })),
+      el('p', { class: 'lx-date', text: now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) }),
+      el('span', { class: 'lx-rule', 'aria-hidden': 'true' })),
+    el('section', { class: 'lx-section', 'aria-labelledby': 'lx-today-h' },
+      el('div', { class: 'lx-head' }, el('h2', { id: 'lx-today-h', text: 'Aujourd’hui' }), todayCount),
+      todayBody),
+    el('section', { class: 'lx-section', 'aria-labelledby': 'lx-ideas-h' },
+      el('div', { class: 'lx-head' }, el('h2', { id: 'lx-ideas-h', text: 'Idées' })),
+      el('ul', { class: 'lx-list' }, ...IDEAS.slice(0, HOME_IDEAS).map((idea, i) => ideaRow(idea, i))),
+      el('button', { class: 'lx-all', type: 'button', 'on:click': () => nav.go('#/ideas') },
+        el('span', { text: `Toutes les idées (${IDEAS.length})` }), arrow())),
   );
   paintToday(null);
   refreshIcoHome();
 }
 
 export function refreshIcoHome() {
-  if (!todayCard || inflight) return;
+  if (!todayBody || inflight) return;
   inflight = true;
   api('/api/today', { timeout: 5000 })
     .then(paintToday)
@@ -33,8 +44,8 @@ export function refreshIcoHome() {
     .finally(() => { inflight = false; });
 }
 
-function greeting() {
-  const h = new Date().getHours();
+function greeting(now) {
+  const h = now.getHours();
   if (h < 5) return 'Bonne nuit';
   if (h < 12) return 'Bonjour';
   if (h < 18) return 'Bon après-midi';
@@ -42,23 +53,18 @@ function greeting() {
 }
 
 function paintToday(data) {
-  if (!todayCard) return;
-  const items = data && data.brief && Array.isArray(data.brief.items) ? data.brief.items : [];
+  if (!todayBody) return;
+  const brief = data && data.brief;
+  const items = brief && Array.isArray(brief.items) ? brief.items : [];
   const open = items.filter((it) => !it.done);
-  const headline = (data && data.brief && data.brief.headline)
-    || (open.length ? `${open.length} chose${open.length > 1 ? 's' : ''} pour aujourd'hui` : 'Rien d’urgent aujourd’hui');
-  const list = el('ul', { class: 'ico-today-items' },
-    ...open.slice(0, 3).map((it) => el('li', {}, el('span', { class: 'dot', dataset: { kind: it.kind || '' } }), el('span', { text: it.text }))));
-  todayCard.replaceChildren(
-    el('span', { class: 'ico-today-kicker', text: 'Today' }),
-    el('span', { class: 'ico-today-headline', text: headline }),
-    list,
+  todayCount.textContent = open.length ? `${open.length} en cours` : '';
+  const headline = (brief && brief.headline) || (open.length ? 'Ce qui vous attend' : 'Rien d’urgent aujourd’hui.');
+  todayBody.replaceChildren(
+    el('span', { class: 'lx-headline', text: headline }),
+    open.length
+      ? el('ol', { class: 'lx-brief' }, ...open.slice(0, TODAY_ITEMS).map((it, i) =>
+        el('li', {}, el('span', { class: 'lx-roman', text: ROMAN[i] }), el('span', { class: 'lx-brief-text', text: it.text }))))
+      : null,
   );
-  list.hidden = open.length === 0;
-}
-
-function stripItem(idea) {
-  return el('button', { class: 'idea-card', type: 'button', role: 'listitem', 'on:click': () => askICO(idea) },
-    el('img', { class: 'idea-art', src: ideaIcon(idea), alt: '', loading: 'lazy', draggable: 'false' }),
-    el('span', { class: 'idea-title', text: idea.title }));
+  todayBody.setAttribute('aria-label', `Today : ${headline}`);
 }

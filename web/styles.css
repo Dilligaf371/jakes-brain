@@ -1045,189 +1045,281 @@ body, .home, .applayer { background: var(--ambient); }
   .tile-btn:active .tile, .button:active { transform: none; }
 }
 
-/* ------------------------------------------------------------------ ICO home (Khalas-style) */
+/* ------------------------------------------------------------------ ICO home — noir & champagne */
 
 @font-face {
-  font-family: 'Bricolage Grotesque';
-  src: url('/fonts/BricolageGrotesque_700Bold.ttf') format('truetype');
-  font-weight: 700;
+  font-family: 'Playfair Display';
+  src: url('/fonts/playfair-display-latin-wght-normal.woff2') format('woff2');
+  font-weight: 400 900;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/fonts/playfair-display-latin-ext-wght-normal.woff2') format('woff2');
+  font-weight: 400 900;
+  font-display: swap;
+  unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --lx-serif: 'Playfair Display', 'Times New Roman', serif;
+  --lx-bg: #f5f1ea;
+  --lx-ink: #17140f;
+  --lx-muted: #6b6457;
+  --lx-gold: #8a6a35;
+  --lx-rule: color-mix(in srgb, #8a6a35 28%, transparent);
+  --lx-tile: #1b1915;
+  --lx-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lx-bg: #080807;
+    --lx-ink: #f1ece2;
+    --lx-muted: #9b9486;
+    --lx-gold: #cdb68c;
+    --lx-rule: color-mix(in srgb, #cdb68c 22%, transparent);
+    --lx-tile: #161512;
+  }
+}
+
+/* The home is its own room: near-black, one warm light from above, no blue glass ambience. */
+.home {
+  background:
+    radial-gradient(120% 60% at 50% -12%, color-mix(in srgb, var(--lx-gold) 11%, transparent), transparent 62%),
+    var(--lx-bg);
+  color: var(--lx-ink);
+}
+.home ::selection { background: color-mix(in srgb, var(--lx-gold) 35%, transparent); color: var(--lx-ink); }
+.home-date { display: none; }
 
 .ico-home {
   width: 100%;
-  max-width: 760px;
+  max-width: 680px;
   align-self: center;
-  margin-bottom: 26px;
-  padding: 0 6px;
+  margin-bottom: 34px;
+  padding: 0 14px;
 }
 
-.ico-greeting {
-  margin: 0 4px 14px;
-  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+.lx-hero { padding: 18px 0 6px; }
+.lx-greeting {
+  margin: 0;
+  font-family: var(--lx-serif);
+  font-size: clamp(40px, 11vw, 56px);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  text-wrap: balance;
 }
-
-.ico-today {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  width: 100%;
-  padding: 16px 18px;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-stroke);
-  border-radius: var(--card-radius);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
-  cursor: pointer;
-  transition: transform 260ms var(--spring);
-}
-.ico-today:active { transform: scale(0.98); }
-
-.ico-today-kicker {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #ff375f;
-}
-
-.ico-today-headline {
-  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.ico-today-items {
-  display: grid;
-  gap: 6px;
-  width: 100%;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
+.lx-dot { color: var(--lx-gold); }
+.lx-date {
+  margin: 12px 0 0;
   font-size: 15px;
-  color: var(--muted);
+  color: var(--lx-muted);
 }
-.ico-today-items li {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  min-width: 0;
+.lx-date::first-letter { text-transform: uppercase; }
+.lx-rule {
+  display: block;
+  height: 1px;
+  margin-top: 26px;
+  background: linear-gradient(90deg, var(--lx-gold), color-mix(in srgb, var(--lx-gold) 45%, transparent) 65%, transparent);
+  transform-origin: left;
+  animation: lx-draw 1100ms var(--lx-ease) both;
 }
-.ico-today-items li span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ico-today-items .dot {
-  flex: 0 0 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--grey);
-  transform: translateY(-1px);
-}
-.ico-today-items .dot[data-kind="deadline"] { background: var(--red); }
-.ico-today-items .dot[data-kind="reply"] { background: var(--accent); }
-.ico-today-items .dot[data-kind="approval"] { background: var(--green); }
-.ico-today-items .dot[data-kind="question"] { background: var(--amber); }
+@keyframes lx-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-.ico-row-head {
+.lx-section { margin-top: 34px; }
+.lx-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin: 22px 4px 10px;
-  font-family: 'Bricolage Grotesque', var(--font, system-ui), sans-serif;
-  font-size: 20px;
-  font-weight: 700;
+  gap: 12px;
+  margin-bottom: 6px;
 }
-.ico-more {
-  padding: 4px 0;
+.lx-head h2 {
+  margin: 0;
+  font-family: var(--lx-serif);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.lx-count {
+  font-size: 13px;
+  color: var(--lx-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Today: no box, just type on the page. */
+.lx-today {
+  display: block;
+  width: 100%;
+  padding: 10px 0 4px;
+  text-align: left;
+  color: inherit;
   font: inherit;
-  font-family: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.lx-headline {
+  display: block;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--lx-ink);
+  text-wrap: balance;
+}
+.lx-brief {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.lx-brief li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--lx-rule);
+}
+.lx-roman {
+  font-family: var(--lx-serif);
   font-size: 15px;
-  font-weight: 600;
-  color: var(--accent);
+  font-style: normal;
+  color: var(--lx-gold);
+}
+.lx-brief-text {
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--lx-ink) 82%, var(--lx-muted));
+  overflow-wrap: anywhere;
+}
+
+/* Editorial rows: Ideas on the home and in the Ideas app. */
+.lx-list { margin: 0; padding: 0; list-style: none; }
+.lx-row { border-top: 1px solid var(--lx-rule); }
+.lx-row:last-child { border-bottom: 1px solid var(--lx-rule); }
+.lx-row-btn {
+  display: grid;
+  grid-template-columns: 34px 1fr 20px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 58px;
+  padding: 14px 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: opacity 200ms var(--lx-ease);
+}
+.lx-num {
+  align-self: baseline;
+  font-family: var(--lx-serif);
+  font-size: 14px;
+  color: var(--lx-gold);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.lx-row-body { display: grid; gap: 5px; min-width: 0; }
+.lx-row-title {
+  font-family: var(--lx-serif);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+.lx-row-detail {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--lx-muted);
+}
+.lx-arrow {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--lx-gold);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 320ms var(--lx-ease);
+}
+.lx-row-btn:active { opacity: 0.6; }
+.lx-row-btn:active .lx-arrow, .lx-all:active .lx-arrow { transform: translateX(4px); }
+@media (hover: hover) {
+  .lx-row-btn:hover .lx-arrow, .lx-all:hover .lx-arrow { transform: translateX(4px); }
+}
+.lx-row-btn:focus-visible, .lx-today:focus-visible, .lx-all:focus-visible {
+  outline: 1px solid var(--lx-gold);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+.lx-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--lx-gold);
   background: none;
   border: 0;
   cursor: pointer;
 }
 
-.ico-strip {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 132px;
-  gap: 10px;
-  margin: 0 -18px;
-  padding: 2px 18px 8px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding: 0 18px;
-  scrollbar-width: none;
+/* App icons on the home go monochrome: one material, the glyph in ivory, gold for badges. */
+.home .tile {
+  background: var(--lx-tile) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--lx-gold) 22%, transparent),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--lx-gold) 18%, transparent),
+    0 8px 18px rgba(0, 0, 0, 0.32);
 }
-.ico-strip::-webkit-scrollbar { display: none; }
-
-/* Idea card: shared by the home strip and the Ideas app. */
-.idea-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 132px;
-  padding: 12px 13px 13px;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-stroke);
-  border-radius: 20px;
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--elev);
-  scroll-snap-align: start;
-  cursor: pointer;
-  transition: transform 260ms var(--spring);
-}
-.idea-card:active { transform: scale(0.96); }
-.idea-art {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.22));
-}
-.idea-title {
-  font-size: 15px;
+.home .tile::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 50%); }
+.home .tile .glyph { opacity: 0.86; }
+.home .tile-calendar .cal-wd { color: var(--lx-gold); }
+.home .tile-label { color: var(--lx-muted); letter-spacing: 0.01em; }
+.home .badge {
+  background: var(--lx-gold);
+  color: #12100c;
   font-weight: 600;
-  line-height: 1.2;
+  box-shadow: 0 0 0 2px var(--lx-bg);
+}
+.home .dock {
+  background: color-mix(in srgb, var(--lx-bg) 72%, transparent);
+  border-color: var(--lx-rule);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lx-gold) 14%, transparent), 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: light) {
+  .home .tile .glyph { opacity: 0.92; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ico-today, .idea-card { transition: none; }
+  .lx-rule { animation: none; }
+  .lx-arrow, .lx-row-btn { transition: none; }
 }
 
-/* The dock floats over the scrolling home, iOS-style; the date sits with the greeting. */
-.dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  margin-top: auto;
+/* The Ideas app lives in the same room as the home. */
+.applayer:has(.app-ideas) {
+  background:
+    radial-gradient(120% 50% at 50% -10%, color-mix(in srgb, var(--lx-gold) 9%, transparent), transparent 60%),
+    var(--lx-bg);
 }
-.grid { padding-bottom: 18px; }
-.home-date {
-  width: 100%;
-  max-width: 760px;
-  align-self: center;
-  margin-bottom: 2px;
-  padding: 0 14px;
-  text-align: left;
+.app-ideas {
+  --accent: var(--lx-gold);
+  color: var(--lx-ink);
 }
+.app-ideas .navbar {
+  background: color-mix(in srgb, var(--lx-bg) 70%, transparent);
+  border-bottom-color: var(--lx-rule);
+  box-shadow: none;
+}
+.app-ideas .nav-title { font-family: var(--lx-serif); font-weight: 500; }
+.app-ideas .nav-back { color: var(--lx-gold); }
